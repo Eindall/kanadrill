@@ -72,6 +72,7 @@
     "@angular/forms": "~22.1.0",
     "@angular/platform-browser": "~22.1.0",
     "@angular/router": "~22.1.0",
+    "@angular/service-worker": "~22.1.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.0",

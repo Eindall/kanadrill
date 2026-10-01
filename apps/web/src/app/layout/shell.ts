@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
+import { AppUpdateService } from '../core/app-update.service';
 import { AuthService } from '../core/auth.service';
 
 @Component({
@@ -23,6 +24,17 @@ import { AuthService } from '../core/auth.service';
       </div>
     </header>
 
+    @if (update.updateReady()) {
+      <div role="status" class="bg-ink text-paper">
+        <div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 text-sm">
+          <span>Une nouvelle version de KanaDrill est disponible.</span>
+          <button type="button" (click)="update.apply()" class="shrink-0 font-medium underline underline-offset-4">
+            Recharger
+          </button>
+        </div>
+      </div>
+    }
+
     <main class="mx-auto max-w-3xl px-4 py-8">
       <router-outlet />
     </main>
@@ -30,4 +42,5 @@ import { AuthService } from '../core/auth.service';
 })
 export class Shell {
   protected readonly auth = inject(AuthService);
+  protected readonly update = inject(AppUpdateService);
 }

@@ -25,7 +25,7 @@
 | Structure | Monorepo **Nx** : `apps/api`, `apps/web`, `libs/shared` | Types partagés front/back (DTO, règles de validation du pseudo). |
 | Back | **NestJS 11** + **TypeORM 1.x** + **PostgreSQL 16** | TypeORM choisi (Prisma recommandé au départ, écarté) : le propriétaire veut se former dessus. Postgres plutôt que SQLite : multi-utilisateurs, écritures concurrentes. |
 | Front | **Angular 22** (composants standalone, signals) + **Tailwind CSS 4** | Tailwind imposé par le propriétaire. |
-| Mobile | **PWA** responsive, mobile d'abord | Une vraie app native est inutile ici. |
+| Mobile | **PWA** responsive, mobile d'abord : manifest + service worker Angular (`@angular/service-worker`) qui ne met en cache que la **coque** de l'application, jamais l'API ; pas de mode hors ligne | Une vraie app native est inutile ici. Pas de bouton « Installer » maison : on laisse le navigateur proposer l'installation (choix du propriétaire). |
 | Authentification | **OAuth Discord uniquement**, via **Passport** (`passport-oauth2`), scope `identify` | Écartés : pseudo + mot de passe (pas de SMTP pour réinitialiser), liens d'invitation, Google. Discord = pas d'e-mail stocké, filtre naturel contre les bots, et un futur **bot Discord** pourra retrouver le compte via l'ID Discord. |
 | Inscription | **Libre** (premier login Discord = création du compte) | Choix du propriétaire. Limitation de débit côté API pour compenser. |
 | Session | **JWT signé dans un cookie httpOnly** (30 jours), sans stockage serveur | Suffisant « dans un premier temps ». **À faire** : table de tokens pour pouvoir révoquer (voir §5). |
@@ -95,8 +95,11 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 - Test d'intégration de l'authentification (`auth.integration.spec.ts`, voir README).
 - Étape 3 : entités `Item` / `UserItem` / `ReviewLog`, migration `LearningSchema`, seed automatique des kana, test d'intégration `learning.integration.spec.ts` (bundle de production démarré sur base vierge : OK).
 
+- Lot B : PWA : `manifest.webmanifest`, icônes (`apps/web/public/icons`, générées par `tools/generate-icons.py`), `ngsw-config.json`, `provideServiceWorker` (production seulement), `AppUpdateService` + bannière « Nouvelle version disponible » dans le `Shell`, règles nginx ; garde-fous dans `apps/web/src/pwa.spec.ts`.
 - Étape 4 : session de révision (API + écran mobile, voir § 3) ; tests de la correction du romaji, de la notation, des QCM, de la file côté front, et test d'intégration `reviews.integration.spec.ts`.
 - Lot A : sessions paramétrées (taille, écritures, exercices, cycle), objectif quotidien (profil, accueil), migration `DailyGoal` ; tests de `composeSession`, du réglage et de l'objectif côté front, intégration de l'API (validation du réglage, ordre, cycle, objectif, isolation).
+
+- Lot B vérifié dans Chrome (headless, serveur local) : le service worker s'enregistre, une navigation vers `/api/auth/discord` atteint bien le serveur (et échoue sans l'exclusion `/api`, contrôle négatif fait), les routes Angular sont servies par le service worker, `fetch('/api/…')` n'est jamais mis en cache, Chrome ne signale aucune erreur d'installabilité ; en-têtes nginx contrôlés sur l'image web construite (service worker sans cache, manifest en `application/manifest+json`, CSP conservée). Ce script de contrôle n'est pas dans le dépôt.
 
 **Non vérifié** : le flux OAuth avec une vraie application Discord, le `docker compose build` réel (aucun Docker disponible lors de la création ; les étapes ont été rejouées à la main), l'affichage des avatars Discord.
 
@@ -107,7 +110,7 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 3. ~~Schéma `Item` / `UserItem` / `ReviewLog` + données de base hiragana et katakana~~ (fait).
 4. ~~Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session~~ (fait). Reste à envisager : idempotence du POST.
 5. ~~**Lot A** : sessions paramétrées (taille, écritures, exercices, cycle) + objectif quotidien (profil, jauge sur l'accueil), suppression de la limite quotidienne~~ (fait).
-6. **Lot B** : PWA (manifest, icônes, service worker qui ne met en cache que la coque de l'application, jamais l'API ; en-têtes nginx pour que le manifest et le service worker ne restent pas en cache).
+6. ~~**Lot B** : PWA (manifest, icônes, service worker qui ne met en cache que la coque de l'application, jamais l'API ; nginx qui ne met pas en cache le service worker ; bannière de mise à jour)~~ (fait).
 7. **Lot C** : table de sessions révocables (voir point 2) ; **à faire avant d'ouvrir l'app à d'autres utilisateurs**, avec une sauvegarde de la base (`pg_dump` planifié). Le déploiement sur le VPS est prévu **après ce lot**.
 8. **Lot D** : mode « Apprendre » : catalogue (grilles par écriture et par groupe : `metadata.group` à ajouter au seed), fiches détail des kana avec **ordre des traits animé** (tracés KanjiVG des 208 kana, générés par script et commités), maîtrise par kana ; page « À propos » avec les licences (KanjiVG CC BY-SA, KANJIDIC2 EDRDG).
 9. **Lot E** : exercice de **tracé** sur mobile (canvas tactile + auto-évaluation, mode `drawing` dans le réglage de session), fonctionne déjà sur les kana grâce au lot D ; vérification automatique du tracé = hors périmètre pour l'instant.
@@ -131,6 +134,12 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 - **Image API** : on n'utilise pas le `package-lock.json` généré par Nx (désynchronisé de son `package.json`, `npm ci` échoue) ; le Dockerfile fait un `npm install` sur le `package.json` épinglé.
 - **Passport sans session** : `passport-oauth2` ne gère le `state` qu'avec une session serveur. Le `state` est donc géré par `DiscordAuthGuard` (cookie). Sans `code` dans le callback (utilisateur qui refuse chez Discord), la lib relancerait le flux en boucle : le guard l'intercepte.
 - **CLI TypeORM** : `migration:generate` ne résout pas `@kanadrill/shared` à l'exécution. Les entités n'importent que des **types** depuis `libs/shared` (pas de constante) ; sinon « Cannot find module '@kanadrill/shared' ».
+- **PWA / service worker** :
+  - **`/api` doit rester hors du service worker.** Par défaut il répond `index.html` à toute navigation ; or la connexion Discord et son retour sont des navigations vers `/api/auth/discord…`. C'est le rôle de `"!/api/**"` dans `navigationUrls` (`ngsw-config.json`) ; `dataGroups` doit rester vide. Un test (`pwa.spec.ts`) le garde.
+  - **nginx ne doit jamais mettre en cache** `ngsw-worker.js`, `ngsw.json`, `safety-worker.js`, `manifest.webmanifest`, sinon les mises à jour n'arrivent plus. Leur règle doit venir **avant** la règle de cache d'un an sur les `.js`, et n'utiliser que `expires -1` : un `add_header` dans un `location` fait perdre au bloc les `add_header` du bloc `server` (CSP, nosniff).
+  - Le service worker n'existe que dans le **build de production** (`nx build web`) ; `nx serve` n'en a pas. Pour le tester en local : construire l'image web (`docker build -f apps/web/Dockerfile .`) ou `docker compose up --build` ; `localhost` compte comme contexte sécurisé, HTTPS n'est requis qu'ailleurs.
+  - Un navigateur garde l'ancienne version tant que l'utilisateur n'a pas rechargé : d'où la bannière de mise à jour. **Secours** si un service worker défectueux est déployé : `safety-worker.js` (livré avec Angular) désinstalle le service worker ; il suffit de le servir sous le nom `ngsw-worker.js`.
+  - L'icône est un « か » **avec le point rouge en bas à droite** : en haut à droite, il se lit comme un dakuten (« が »).
 - **UUID** : générés par `pgcrypto` (`gen_random_uuid`, natif depuis Postgres 13), aucune extension à installer.
 - **Formulaires Angular** : un `<form>` avec seulement `ReactiveFormsModule` se soumet nativement (rechargement de page) ; utiliser `(submit)` + `preventDefault()` ou importer `FormsModule`.
 - **IP réelle** : nginx (conteneur web) ne fait confiance à `X-Forwarded-For` que depuis les réseaux privés ; l'API a `trust proxy = 1`. Si un CDN (ex. Cloudflare en mode proxy) est placé devant, adapter la config pour que la limitation de débit voie la vraie IP.
