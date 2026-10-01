@@ -1,4 +1,4 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthGuard } from '@nestjs/passport';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
@@ -16,6 +16,8 @@ const STATE_MAX_AGE_MS = 10 * 60 * 1000;
  */
 @Injectable()
 export class DiscordAuthGuard extends AuthGuard('discord') {
+  private readonly logger = new Logger(DiscordAuthGuard.name);
+
   constructor(
     private readonly config: ConfigService,
     private readonly session: SessionService,
@@ -38,13 +40,16 @@ export class DiscordAuthGuard extends AuthGuard('discord') {
       // Sans `code` (ex. l'utilisateur a refusé l'accès chez Discord), passport-oauth2 relancerait le flux
       // depuis le début : on s'arrête ici pour éviter une boucle de redirections.
       if (typeof req.query['code'] !== 'string') {
+        this.logger.warn(`Retour Discord sans code : error=${String(req.query['error'])} description=${String(req.query['error_description'])}`);
         return this.fail(res, 'discord');
       }
     }
 
     try {
       return (await super.canActivate(context)) as boolean;
-    } catch {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : JSON.stringify(error);
+      this.logger.warn(`Échec de l'authentification Discord : ${detail}`);
       return this.fail(res, 'discord');
     }
   }

@@ -39,16 +39,19 @@ export class DiscordStrategy extends PassportStrategy(Strategy, 'discord') {
 
   /** Appelé par passport-oauth2 après l'échange du code : récupère le profil auprès de Discord. */
   override userProfile(accessToken: string, done: (err?: Error | null, profile?: unknown) => void): void {
-    // `_oauth2` est l'attribut interne de passport-oauth2 (pas d'API publique pour un GET authentifié).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (this as any)._oauth2.get(ME_URL, accessToken, (error: unknown, body?: string) => {
-      if (error || !body) return done(new Error('discord_profile_failed'));
-      try {
-        done(null, JSON.parse(body) as DiscordUser);
-      } catch {
-        done(new Error('discord_profile_invalid'));
-      }
-    });
+    // `fetch` plutôt que `_oauth2.get` : Discord exige un User-Agent et on veut voir le statut en cas d'échec.
+    fetch(ME_URL, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'KanaDrill (https://github.com/kanadrill, 1.0)' },
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const body = (await response.text()).slice(0, 200);
+          throw new Error(`discord_profile_failed: HTTP ${response.status} ${body}`);
+        }
+        return (await response.json()) as DiscordUser;
+      })
+      .then((me) => done(null, me))
+      .catch((error: unknown) => done(error instanceof Error ? error : new Error('discord_profile_failed')));
   }
 
   /** Transforme le profil Discord en profil applicatif ; le résultat devient `req.user`. */
