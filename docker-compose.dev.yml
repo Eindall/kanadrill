@@ -1,0 +1,19 @@
+# Développement : seulement PostgreSQL, en local. L'API et le front tournent avec `npm run dev:api` / `npm run dev:web`.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kanadrill
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: kanadrill
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - kanadrill-dev-db:/var/lib/postgresql/data
+
+volumes:
+  kanadrill-dev-db:

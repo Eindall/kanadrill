@@ -1,0 +1,14 @@
+node_modules
+dist
+.nx
+.git
+.env
+.env.*
+!.env.example
+coverage
+tmp
+**/*.md
+!README.md
+.vscode
+.idea
+.angular
