@@ -46,9 +46,9 @@ const APP_URL = 'http://localhost:4200';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     oauth2.getOAuthAccessToken = (code: string, _params: unknown, cb: any) =>
       failExchange ? cb({ statusCode: 400, data: 'invalid_grant' }) : cb(null, `token-${code}`, 'refresh', {});
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    oauth2.get = (_url: string, _token: string, cb: any) =>
-      cb(null, JSON.stringify({ id: '123456789012345678', username: 'thomas', global_name: 'Thomas', avatar: null }));
+    // Le profil est récupéré par DiscordStrategy.userProfile (via `fetch`, plus via `_oauth2.get`).
+    app.get(DiscordStrategy).userProfile = (_token, done) =>
+      done(null, { id: '123456789012345678', username: 'thomas', global_name: 'Thomas', avatar: null });
 
     await app.get(DataSource).query('TRUNCATE users CASCADE');
   }, 60_000);

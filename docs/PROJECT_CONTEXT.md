@@ -94,3 +94,4 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 - **UUID** : générés par `pgcrypto` (`gen_random_uuid`, natif depuis Postgres 13), aucune extension à installer.
 - **Formulaires Angular** : un `<form>` avec seulement `ReactiveFormsModule` se soumet nativement (rechargement de page) ; utiliser `(submit)` + `preventDefault()` ou importer `FormsModule`.
 - **IP réelle** : nginx (conteneur web) ne fait confiance à `X-Forwarded-For` que depuis les réseaux privés ; l'API a `trust proxy = 1`. Si un CDN (ex. Cloudflare en mode proxy) est placé devant, adapter la config pour que la limitation de débit voie la vraie IP.
+- **Tests d'intégration** : ils partagent une même base (`TRUNCATE users`, migrations). Jest tourne avec `maxWorkers: 1` pour l'API (`jest.config.cts`) ; en parallèle, le test d'auth échouait au hasard. Si le flux de profil Discord change (`DiscordStrategy.userProfile`), adapter la simulation dans `auth.integration.spec.ts`.
