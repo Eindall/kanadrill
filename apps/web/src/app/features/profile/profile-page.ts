@@ -2,7 +2,13 @@ import { DatePipe } from '@angular/common';
 import { Component, effect, inject, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_PATTERN } from '@kanadrill/shared';
+import {
+  MAX_DAILY_GOAL,
+  MIN_DAILY_GOAL,
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+  USERNAME_PATTERN,
+} from '@kanadrill/shared';
 import { AuthService } from '../../core/auth.service';
 
 const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
@@ -53,6 +59,41 @@ const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
           }
           @if (saveError()) {
             <p role="alert" class="text-sm text-seal">{{ saveError() }}</p>
+          }
+        </section>
+
+        <section class="flex flex-col gap-3" aria-labelledby="goal-label">
+          <h2 id="goal-label" class="text-lg font-medium">Objectif quotidien</h2>
+          <p class="text-sm text-ink-soft">
+            Nombre de cartes que tu veux tenter chaque jour, réussies ou non. C'est un repère, pas une limite.
+          </p>
+          <form class="flex flex-col gap-3 sm:flex-row" (submit)="saveGoal($event)">
+            <input
+              type="number"
+              inputmode="numeric"
+              [min]="goalMin"
+              [max]="goalMax"
+              step="1"
+              [formControl]="goal"
+              aria-labelledby="goal-label"
+              class="min-w-0 flex-1 border border-line bg-paper px-4 py-3 text-base"
+            />
+            <button
+              type="submit"
+              [disabled]="goal.invalid || goal.pristine || goalSaving()"
+              class="bg-ink px-6 py-3 font-medium text-paper transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Enregistrer
+            </button>
+          </form>
+          @if (goal.dirty && goal.invalid) {
+            <p role="alert" class="text-sm text-seal">Entre {{ goalMin }} et {{ goalMax }} cartes (un nombre entier).</p>
+          }
+          @if (goalSaved()) {
+            <p role="status" class="text-sm text-ink-soft">Objectif enregistré.</p>
+          }
+          @if (goalError()) {
+            <p role="alert" class="text-sm text-seal">{{ goalError() }}</p>
           }
         </section>
 
@@ -117,6 +158,21 @@ export class ProfilePage {
     ],
   });
 
+  protected readonly goalMin = MIN_DAILY_GOAL;
+  protected readonly goalMax = MAX_DAILY_GOAL;
+  protected readonly goal = new FormControl<number>(0, {
+    nonNullable: true,
+    validators: [
+      Validators.required,
+      Validators.min(MIN_DAILY_GOAL),
+      Validators.max(MAX_DAILY_GOAL),
+      Validators.pattern(/^\d+$/),
+    ],
+  });
+  protected readonly goalSaving = signal(false);
+  protected readonly goalSaved = signal(false);
+  protected readonly goalError = signal<string | null>(null);
+
   protected readonly saving = signal(false);
   protected readonly saved = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -128,6 +184,9 @@ export class ProfilePage {
       const user = this.auth.user();
       if (user && this.username.pristine) {
         this.username.setValue(user.username);
+      }
+      if (user && this.goal.pristine) {
+        this.goal.setValue(user.dailyGoal);
       }
     });
   }
@@ -151,6 +210,23 @@ export class ProfilePage {
       this.saveError.set("Le pseudo n'a pas pu être enregistré. Réessaie.");
     } finally {
       this.saving.set(false);
+    }
+  }
+
+  protected async saveGoal(event: Event): Promise<void> {
+    event.preventDefault();
+    if (this.goal.invalid || this.goal.pristine) return;
+    this.goalSaving.set(true);
+    this.goalSaved.set(false);
+    this.goalError.set(null);
+    try {
+      await this.auth.updateDailyGoal(Number(this.goal.value));
+      this.goal.markAsPristine();
+      this.goalSaved.set(true);
+    } catch {
+      this.goalError.set("L'objectif n'a pas pu être enregistré. Réessaie.");
+    } finally {
+      this.goalSaving.set(false);
     }
   }
 

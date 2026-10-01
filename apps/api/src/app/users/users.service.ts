@@ -66,7 +66,7 @@ export class UsersService {
   async updateProfile(id: string, patch: UpdateProfileRequest): Promise<User> {
     const user = await this.findOneOrFail(id);
     if (patch.username !== undefined) user.username = patch.username;
-    if (patch.dailyNewLimit !== undefined) user.dailyNewLimit = patch.dailyNewLimit;
+    if (patch.dailyGoal !== undefined) user.dailyGoal = patch.dailyGoal;
     await this.users.save(user);
     return user;
   }
@@ -81,7 +81,7 @@ export class UsersService {
       id: user.id,
       username: user.username,
       avatarUrl: user.avatarUrl,
-      dailyNewLimit: user.dailyNewLimit,
+      dailyGoal: user.dailyGoal,
       createdAt: user.createdAt.toISOString(),
       identities: (user.identities ?? []).map((identity) => ({
         provider: identity.provider,

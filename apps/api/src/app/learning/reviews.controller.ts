@@ -1,8 +1,9 @@
-import { Body, Controller, Get, HttpCode, Post, UseGuards } from '@nestjs/common';
-import type { ReviewResultDto, ReviewSessionDto } from '@kanadrill/shared';
+import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
+import type { ReviewOverviewDto, ReviewResultDto, ReviewSessionDto } from '@kanadrill/shared';
 import { CurrentUserId } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { SubmitReviewDto } from './review-session.dto';
+import { SessionQueryDto } from './session-query.dto';
 import { ReviewsService } from './reviews.service';
 
 @Controller('reviews')
@@ -10,9 +11,14 @@ import { ReviewsService } from './reviews.service';
 export class ReviewsController {
   constructor(private readonly reviews: ReviewsService) {}
 
+  @Get('overview')
+  overview(@CurrentUserId() userId: string): Promise<ReviewOverviewDto> {
+    return this.reviews.getOverview(userId);
+  }
+
   @Get('session')
-  session(@CurrentUserId() userId: string): Promise<ReviewSessionDto> {
-    return this.reviews.getSession(userId);
+  session(@CurrentUserId() userId: string, @Query() query: SessionQueryDto): Promise<ReviewSessionDto> {
+    return this.reviews.getSession(userId, query);
   }
 
   @Post()

@@ -1,7 +1,8 @@
 import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
 import {
-  MAX_DAILY_NEW_LIMIT,
+  MAX_DAILY_GOAL,
+  MIN_DAILY_GOAL,
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
@@ -20,7 +21,7 @@ export class UpdateProfileDto implements UpdateProfileRequest {
 
   @IsOptional()
   @IsInt()
-  @Min(0)
-  @Max(MAX_DAILY_NEW_LIMIT)
-  dailyNewLimit?: number;
+  @Min(MIN_DAILY_GOAL)
+  @Max(MAX_DAILY_GOAL)
+  dailyGoal?: number;
 }

@@ -1,5 +1,5 @@
 import type { SessionCardDto } from '@kanadrill/shared';
-import { advanceQueue, summarize, type Attempt } from './review-queue';
+import { advanceQueue, summarize, toQueue, type Attempt } from './review-queue';
 
 const card = (id: string, character: string): SessionCardDto => ({
   item: { id, type: 'hiragana', character, readings: [id], meanings: [] },
@@ -8,7 +8,15 @@ const card = (id: string, character: string): SessionCardDto => ({
   isNew: true,
 });
 const [a, b, c] = [card('a', 'あ'), card('i', 'い'), card('u', 'う')];
-const attempt = (c: SessionCardDto, correct: boolean, durationMs = 1000, nextDue = '2030-01-01T00:00:00.000Z'): Attempt => ({
+const c0 = c;
+const attempt = (
+  c: SessionCardDto,
+  correct: boolean,
+  durationMs = 1000,
+  nextDue = '2030-01-01T00:00:00.000Z',
+  key = [a, b, c0].indexOf(c),
+): Attempt => ({
+  key,
   card: c,
   correct,
   expected: c.item.readings[0],
@@ -30,6 +38,14 @@ describe('advanceQueue', () => {
   });
 });
 
+describe('toQueue', () => {
+  it('donne une clé distincte à chaque place, même pour un item répété par le cycle', () => {
+    const queue = toQueue([a, b, a]);
+    expect(queue.map((entry) => entry.key)).toEqual([0, 1, 2]);
+    expect(queue[0].card).toBe(queue[2].card);
+  });
+});
+
 describe('summarize', () => {
   it('compte une carte ratée puis réussie comme ratée du premier coup', () => {
     const summary = summarize([attempt(a, false), attempt(b, true), attempt(a, true)]);
@@ -46,6 +62,12 @@ describe('summarize', () => {
     ]);
     expect(summary.averageDurationMs).toBe(2000);
     expect(summary.nextDue).toBe('2026-01-02T00:00:00.000Z');
+  });
+  it('compte séparément les deux passages d\'un même item dans le cycle, sans doublon dans les cartes ratées', () => {
+    const summary = summarize([attempt(a, false, 1000, undefined, 0), attempt(a, true, 1000, undefined, 1), attempt(a, false, 1000, undefined, 2)]);
+    expect(summary.cards).toBe(3);
+    expect(summary.firstTryCorrect).toBe(1);
+    expect(summary.missed).toHaveLength(1);
   });
   it('gère une session vide', () => {
     expect(summarize([])).toEqual({

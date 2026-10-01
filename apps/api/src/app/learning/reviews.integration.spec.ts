@@ -10,7 +10,12 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { DataSource } from 'typeorm';
-import { CARD_STATE, type ReviewResultDto, type ReviewSessionDto } from '@kanadrill/shared';
+import {
+  CARD_STATE,
+  type ReviewOverviewDto,
+  type ReviewResultDto,
+  type ReviewSessionDto,
+} from '@kanadrill/shared';
 import { AppModule } from '../app.module';
 import { SESSION_COOKIE } from '../auth/session';
 import { Item } from './item.entity';
@@ -27,6 +32,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
   let cookieA: string;
   let cookieB: string;
   let userA: User;
+  let userC: User;
 
   const itemId = async (character: string) =>
     (await dataSource.getRepository(Item).findOneByOrFail({ character, type: 'hiragana' })).id;
@@ -37,7 +43,11 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  const getSession = async (cookie: string) => (await (await call(cookie, 'GET', '/reviews/session')).json()) as ReviewSessionDto;
+  const sessionUrl = (query: string) => `/reviews/session?${query}`;
+  const getSession = async (cookie: string, query = 'count=15&types=hiragana&modes=choice') =>
+    (await (await call(cookie, 'GET', sessionUrl(query))).json()) as ReviewSessionDto;
+  const getOverview = async (cookie: string) =>
+    (await (await call(cookie, 'GET', '/reviews/overview')).json()) as ReviewOverviewDto;
   const answer = (cookie: string, id: string, answerText: string, mode: 'choice' | 'typing' = 'choice', durationMs = 3000) =>
     call(cookie, 'POST', '/reviews', { itemId: id, mode, answer: answerText, durationMs });
   const characters = (session: ReviewSessionDto) => session.cards.map((card) => card.item.character);
@@ -64,6 +74,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     const users = dataSource.getRepository(User);
     userA = await users.save({ username: 'alice', avatarUrl: null });
     const userB = await users.save({ username: 'bob', avatarUrl: null });
+    userC = await users.save({ username: 'carol', avatarUrl: null });
     const jwt = app.get(JwtService);
     cookieA = `${SESSION_COOKIE}=${await jwt.signAsync({ sub: userA.id })}`;
     cookieB = `${SESSION_COOKIE}=${await jwt.signAsync({ sub: userB.id })}`;
@@ -72,32 +83,81 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
   afterAll(async () => app?.close());
 
   it('exige une session', async () => {
-    expect((await call(undefined, 'GET', '/reviews/session')).status).toBe(401);
+    expect((await call(undefined, 'GET', sessionUrl('count=15&types=hiragana&modes=choice'))).status).toBe(401);
+    expect((await call(undefined, 'GET', '/reviews/overview')).status).toBe(401);
     expect((await call(undefined, 'POST', '/reviews', {})).status).toBe(401);
   });
 
-  it('propose les 10 premières nouvelles cartes dans l\'ordre pédagogique, avec QCM', async () => {
-    const session = await getSession(cookieA);
-    expect(characters(session)).toEqual(['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ']);
-    expect(session.counts).toEqual({ due: 0, new: 10 });
-    expect(session.dailyNewLimit).toBe(10);
+  it('valide le réglage de la session', async () => {
+    const status = async (query: string) => (await call(cookieA, 'GET', sessionUrl(query))).status;
+    expect(await status('')).toBe(400);
+    expect(await status('types=hiragana&modes=choice')).toBe(400); // pas de taille
+    expect(await status('count=20&types=hiragana&modes=choice')).toBe(400); // taille non proposée
+    expect(await status('count=15&modes=choice')).toBe(400); // pas de type
+    expect(await status('count=15&types=&modes=choice')).toBe(400);
+    expect(await status('count=15&types=kanji&modes=choice')).toBe(400); // pas encore disponible
+    expect(await status('count=15&types=hiragana,hiragana&modes=choice')).toBe(400);
+    expect(await status('count=15&types=hiragana')).toBe(400); // pas de mode
+    expect(await status('count=15&types=hiragana&modes=drawing')).toBe(400);
+    expect(await status('count=15&types=hiragana&modes=choice&limit=3')).toBe(400);
+    expect(await status('count=15&types=hiragana&modes=choice')).toBe(200);
+    expect(await status('count=50&types=hiragana,katakana&modes=choice,typing')).toBe(200);
+    expect(await status('count=30&types=hiragana&types=katakana&modes=choice')).toBe(200); // paramètre répété
+  });
+
+  it('propose des cartes jamais vues tirées au hasard (pas toujours あ い う…), avec QCM, sans rien écrire', async () => {
+    const session = await getSession(cookieA, 'count=15&types=hiragana&modes=choice');
+    expect(new Set(characters(session)).size).toBe(15);
+    expect(session.cards.every((card) => card.item.type === 'hiragana')).toBe(true);
+    // Deux sessions successives ne proposent pas la même liste dans le même ordre.
+    const again = await getSession(cookieA, 'count=15&types=hiragana&modes=choice');
+    expect(characters(again)).not.toEqual(characters(session));
+    // 20 tirages de 15 parmi 104 : on ne reste pas cantonné aux 15 premiers kana de la table.
+    const seenCharacters = new Set<string>();
+    for (let i = 0; i < 20; i++) (await getSession(cookieA)).cards.forEach((card) => seenCharacters.add(card.item.character));
+    expect(seenCharacters.size).toBeGreaterThan(15);
+    expect(session.counts).toEqual({ due: 0, new: 15, extra: 0 });
     for (const card of session.cards) {
       expect(card).toMatchObject({ mode: 'choice', isNew: true });
       expect(card.choices).toHaveLength(4);
       expect(new Set(card.choices).size).toBe(4);
       expect(card.choices).toContain(card.item.readings[0]);
     }
-    // Un GET n'écrit rien.
     expect(await dataSource.getRepository(UserItem).countBy({ userId: userA.id })).toBe(0);
   });
 
-  it('la limite quotidienne se règle sur le profil (bornée)', async () => {
-    expect((await call(cookieA, 'PATCH', '/users/me', { dailyNewLimit: 101 })).status).toBe(400);
-    expect((await call(cookieA, 'PATCH', '/users/me', { dailyNewLimit: -1 })).status).toBe(400);
-    const res = await call(cookieA, 'PATCH', '/users/me', { dailyNewLimit: 3 });
+  it('respecte la taille, les types et les exercices cochés', async () => {
+    const big = await getSession(cookieA, 'count=50&types=hiragana,katakana&modes=choice');
+    expect(big.cards).toHaveLength(50);
+    expect(new Set(characters(big)).size).toBe(50);
+    expect(new Set(big.cards.map((card) => card.item.type))).toEqual(new Set(['hiragana', 'katakana'])); // tirés dans les deux lots
+
+    const katakana = await getSession(cookieA, 'count=15&types=katakana&modes=typing');
+    expect(katakana.cards.every((card) => card.item.type === 'katakana')).toBe(true);
+    expect(katakana.cards.every((card) => card.mode === 'typing' && card.choices === undefined)).toBe(true);
+
+    const both = await getSession(cookieA, 'count=50&types=hiragana&modes=choice,typing');
+    expect(new Set(both.cards.map((card) => card.mode))).toEqual(new Set(['choice', 'typing']));
+    expect(both.cards.every((card) => (card.mode === 'choice') === (card.choices !== undefined))).toBe(true);
+  });
+
+  it('indique les cartes disponibles par type et l\'objectif du jour', async () => {
+    expect(await getOverview(cookieA)).toEqual({
+      available: { hiragana: { total: 104, due: 0 }, katakana: { total: 104, due: 0 } },
+      answersToday: 0,
+      dailyGoal: 30,
+    });
+  });
+
+  it('l\'objectif quotidien se règle sur le profil (borné)', async () => {
+    for (const dailyGoal of [0, 501, 1.5, 'beaucoup']) {
+      expect((await call(cookieA, 'PATCH', '/users/me', { dailyGoal })).status).toBe(400);
+    }
+    expect((await call(cookieA, 'PATCH', '/users/me', { dailyNewLimit: 3 })).status).toBe(400); // ancienne option retirée
+    const res = await call(cookieA, 'PATCH', '/users/me', { dailyGoal: 45 });
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { dailyNewLimit: number }).dailyNewLimit).toBe(3);
-    expect(characters(await getSession(cookieA))).toEqual(['あ', 'い', 'う']);
+    expect(((await res.json()) as { dailyGoal: number }).dailyGoal).toBe(45);
+    expect((await getOverview(cookieA)).dailyGoal).toBe(45);
   });
 
   it('une bonne réponse crée la carte FSRS et le journal (snapshot avant réponse)', async () => {
@@ -128,13 +188,19 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(si).toMatchObject({ correct: true, expected: 'shi' });
   });
 
-  it('la limite quotidienne est consommée : plus de nouvelles cartes (し compte aussi)', async () => {
-    const session = await getSession(cookieA);
-    expect(session.counts.new).toBe(0);
-    expect(characters(session)).toEqual([]); // les cartes en apprentissage ne sont dues que dans quelques minutes
+  it('l\'objectif compte les réponses données, réussies ou non', async () => {
+    expect((await getOverview(cookieA)).answersToday).toBe(4); // あ juste, い faux, う juste, し juste
   });
 
-  it('renvoie les cartes dues (QCM en apprentissage, saisie en révision), les plus anciennes d\'abord', async () => {
+  it('garde de côté les cartes vues pas encore dues tant qu\'il reste des cartes jamais vues', async () => {
+    // あ い う し viennent d'être vues : échéance dans quelques minutes, donc ni dues ni nouvelles.
+    const session = await getSession(cookieA, 'count=50&types=hiragana&modes=choice');
+    expect(session.counts).toEqual({ due: 0, new: 50, extra: 0 });
+    expect(session.cards).toHaveLength(50);
+    expect(characters(session)).not.toContain('あ');
+  });
+
+  it('met les cartes dues en premier, les plus en retard d\'abord', async () => {
     const repo = dataSource.getRepository(UserItem);
     const hour = 3_600_000;
     await repo.update({ userId: userA.id, itemId: await itemId('あ') }, { due: new Date(Date.now() - 2 * hour) });
@@ -143,11 +209,10 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       { due: new Date(Date.now() - 3 * hour), state: CARD_STATE.Review },
     );
     const session = await getSession(cookieA);
-    expect(characters(session)).toEqual(['い', 'あ']);
-    expect(session.counts).toEqual({ due: 2, new: 0 });
-    expect(session.cards[0]).toMatchObject({ mode: 'typing', isNew: false });
-    expect(session.cards[0].choices).toBeUndefined();
-    expect(session.cards[1]).toMatchObject({ mode: 'choice', isNew: false });
+    expect(characters(session).slice(0, 2)).toEqual(['い', 'あ']);
+    expect(session.counts).toEqual({ due: 2, new: 13, extra: 0 });
+    expect(session.cards.map((card) => card.isNew).slice(0, 3)).toEqual([false, false, true]);
+    expect((await getOverview(cookieA)).available.hiragana).toEqual({ total: 104, due: 2 });
   });
 
   it('une carte en révision ratée compte un lapse', async () => {
@@ -157,19 +222,31 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(userItem).toMatchObject({ lapses: 1, state: CARD_STATE.Relearning });
   });
 
-  it('le jour suivant, la limite repart de zéro (sans reproposer les cartes déjà vues)', async () => {
+  it('complète avec des cartes déjà vues (la moins récemment vue d\'abord) quand tout a été vu', async () => {
+    await dataSource.query(
+      `INSERT INTO user_items (user_id, item_id, state, due, last_review)
+       SELECT $1, id, 2, now() + interval '5 days', now() - (sort_order || ' hours')::interval
+       FROM items WHERE type = 'hiragana'`,
+      [userC.id],
+    );
+    const cookieC = `${SESSION_COOKIE}=${await app.get(JwtService).signAsync({ sub: userC.id })}`;
+    const session = await getSession(cookieC, 'count=15&types=hiragana&modes=choice');
+    expect(session.counts).toEqual({ due: 0, new: 0, extra: 15 });
+    expect(session.cards.every((card) => !card.isNew)).toBe(true);
+    // sort_order 103 = dernier kana de la table (ぴょ) = vu il y a le plus longtemps.
+    expect(characters(session)[0]).toBe('ぴょ');
+  });
+
+  it('le jour suivant, le compteur de l\'objectif repart de zéro', async () => {
     await dataSource.query(`UPDATE review_logs SET reviewed_at = reviewed_at - interval '2 days' WHERE user_id = $1`, [userA.id]);
-    const session = await getSession(cookieA);
-    expect(session.counts.new).toBe(3);
-    // Les nouvelles cartes suivent あ い う し (déjà vues) ; あ revient seulement parce qu'elle est encore due.
-    const fresh = session.cards.filter((card) => card.isNew).map((card) => card.item.character);
-    expect(fresh).toEqual(['え', 'お', 'か']);
+    expect((await getOverview(cookieA)).answersToday).toBe(0);
   });
 
   it('isole les utilisateurs', async () => {
+    const overview = await getOverview(cookieB);
+    expect(overview).toMatchObject({ answersToday: 0, dailyGoal: 30 });
     const session = await getSession(cookieB);
-    expect(session.counts).toEqual({ due: 0, new: 10 });
-    expect(session.cards[0].item.character).toBe('あ');
+    expect(session.counts).toEqual({ due: 0, new: 15, extra: 0 });
     expect(await dataSource.getRepository(ReviewLog).countBy({ userId: (await dataSource.getRepository(User).findOneByOrFail({ username: 'bob' })).id })).toBe(0);
   });
 

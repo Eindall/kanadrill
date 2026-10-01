@@ -24,7 +24,7 @@ export class Item {
   @Column({ type: 'text', array: true, default: () => "'{}'" })
   meanings!: string[];
 
-  /** Ordre pédagogique d'introduction des nouvelles cartes (croissant), fixé par le seed. */
+  /** Ordre pédagogique (croissant), fixé par le seed : sert à proposer les cartes jamais vues dans l'ordre. */
   @Column({ name: 'sort_order', type: 'integer', default: 0 })
   sortOrder!: number;
 

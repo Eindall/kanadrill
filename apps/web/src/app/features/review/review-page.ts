@@ -1,11 +1,13 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { isRomajiCorrect, type ItemType, type SessionCardDto } from '@kanadrill/shared';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { isRomajiCorrect, type SessionConfig } from '@kanadrill/shared';
 import { ReviewService } from '../../core/review.service';
-import { advanceQueue, summarize, type Attempt } from './review-queue';
+import { advanceQueue, summarize, toQueue, type Attempt, type QueueEntry } from './review-queue';
+import { configFromParams, TYPE_LABELS } from './session-config';
 
-type Phase = 'loading' | 'error' | 'empty' | 'question' | 'feedback' | 'done';
+type Phase = 'loading' | 'error' | 'question' | 'feedback' | 'done';
 
 interface Feedback {
   correct: boolean;
@@ -15,8 +17,6 @@ interface Feedback {
   saving: boolean;
   saveError: boolean;
 }
-
-const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
 
 @Component({
   selector: 'app-review-page',
@@ -30,29 +30,16 @@ const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 
 
       @case ('error') {
         <div role="alert" class="flex flex-col items-start gap-4 border-l-4 border-seal bg-paper p-5">
-          <p class="font-medium">Impossible de charger ta session.</p>
-          <button type="button" (click)="start()" class="bg-ink px-6 py-3 font-medium text-paper hover:bg-ink/90">
-            Réessayer
-          </button>
+          <p class="font-medium">{{ errorMessage() }}</p>
+          <div class="flex flex-wrap gap-3">
+            <button type="button" (click)="start()" class="bg-ink px-6 py-3 font-medium text-paper hover:bg-ink/90">
+              Réessayer
+            </button>
+            <a routerLink="/review/new" class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-paper">
+              Changer de réglage
+            </a>
+          </div>
         </div>
-      }
-
-      @case ('empty') {
-        <section class="flex flex-col items-start gap-5 border border-line bg-paper p-6">
-          <h1 class="text-2xl font-semibold tracking-tight">Rien à réviser pour l'instant</h1>
-          <p class="max-w-prose text-ink-soft">
-            Tu as terminé tes révisions du moment
-            @if (dailyNewLimit() > 0) {
-              et atteint ta limite de {{ dailyNewLimit() }} nouvelles cartes par jour.
-            } @else {
-              (les nouvelles cartes sont désactivées dans ton profil).
-            }
-            Reviens plus tard : les cartes reviennent quand elles sont dues.
-          </p>
-          <a routerLink="/" class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-paper">
-            Retour à l'accueil
-          </a>
-        </section>
       }
 
       @case ('done') {
@@ -113,8 +100,11 @@ const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 
               (click)="start()"
               class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-paper"
             >
-              Continuer à réviser
+              Relancer la même session
             </button>
+            <a routerLink="/review/new" class="border border-ink px-6 py-3 text-center font-medium hover:bg-ink hover:text-paper">
+              Changer de réglage
+            </a>
           </div>
         </section>
       }
@@ -139,7 +129,7 @@ const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 
 
             <div class="flex flex-col items-center gap-2 border border-line bg-paper px-4 py-8">
               <p class="flex gap-2 text-xs uppercase tracking-wide text-ink-soft">
-                <span>{{ typeLabel(current) }}</span>
+                <span>{{ typeLabel(current.item.type) }}</span>
                 @if (current.isNew) {
                   <span class="font-semibold text-ink">· Nouveau</span>
                 }
@@ -238,16 +228,20 @@ const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 
 })
 export class ReviewPage {
   private readonly reviews = inject(ReviewService);
+  private readonly router = inject(Router);
+  /** Réglage de la session, lu dans l'URL ; `null` si invalide (on renvoie alors vers l'écran de réglage). */
+  private readonly config: SessionConfig | null = configFromParams(inject(ActivatedRoute).snapshot.queryParamMap);
 
   protected readonly phase = signal<Phase>('loading');
-  protected readonly queue = signal<SessionCardDto[]>([]);
+  protected readonly queue = signal<QueueEntry[]>([]);
   protected readonly total = signal(0);
-  protected readonly dailyNewLimit = signal(0);
+  protected readonly errorMessage = signal('');
   protected readonly attempts = signal<Attempt[]>([]);
   protected readonly feedback = signal<Feedback | null>(null);
   protected readonly typed = signal('');
 
-  protected readonly card = computed(() => this.queue()[0] ?? null);
+  protected readonly entry = computed(() => this.queue()[0] ?? null);
+  protected readonly card = computed(() => this.entry()?.card ?? null);
   protected readonly completed = computed(() => this.total() - this.queue().length);
   protected readonly summary = computed(() => summarize(this.attempts()));
 
@@ -261,30 +255,37 @@ export class ReviewPage {
     // Le focus suit le flux : sur « Suivant » après une réponse (Entrée enchaîne), sur le champ pour la saisie.
     effect(() => this.nextButton()?.nativeElement.focus());
     effect(() => this.answerInput()?.nativeElement.focus());
-    void this.start();
+    if (this.config) {
+      void this.start();
+    } else {
+      void this.router.navigate(['/review/new'], { replaceUrl: true });
+    }
   }
 
   async start(): Promise<void> {
+    if (!this.config) return;
     this.phase.set('loading');
     this.attempts.set([]);
     this.feedback.set(null);
+    this.typed.set('');
     try {
-      const session = await this.reviews.loadSession();
-      this.dailyNewLimit.set(session.dailyNewLimit);
-      if (session.cards.length === 0) {
-        this.phase.set('empty');
-        return;
-      }
-      this.queue.set(session.cards);
+      const session = await this.reviews.loadSession(this.config);
+      this.queue.set(toQueue(session.cards));
       this.total.set(session.cards.length);
       this.showQuestion();
-    } catch {
+    } catch (error) {
+      // 400 = sélection sans carte : le serveur explique pourquoi ; sinon, problème réseau ou serveur.
+      this.errorMessage.set(
+        error instanceof HttpErrorResponse && error.status === 400 && typeof error.error?.message === 'string'
+          ? error.error.message
+          : 'Impossible de charger ta session.',
+      );
       this.phase.set('error');
     }
   }
 
-  protected typeLabel(card: SessionCardDto): string {
-    return TYPE_LABELS[card.item.type];
+  protected typeLabel(type: keyof typeof TYPE_LABELS): string {
+    return TYPE_LABELS[type];
   }
 
   protected choiceClass(choice: string): string {
@@ -311,8 +312,9 @@ export class ReviewPage {
   }
 
   protected async answer(text: string): Promise<void> {
-    const card = this.card();
-    if (!card || this.phase() !== 'question') return;
+    const entry = this.entry();
+    if (!entry || this.phase() !== 'question') return;
+    const card = entry.card;
     const durationMs = Math.round(performance.now() - this.shownAt);
 
     // Retour immédiat avec la même logique que le serveur ; la réponse du serveur fait foi ensuite.
@@ -331,7 +333,7 @@ export class ReviewPage {
         const result = await this.reviews.submit({ itemId: card.item.id, mode: card.mode, answer: text, durationMs });
         this.attempts.update((list) => [
           ...list,
-          { card, correct: result.correct, expected: result.expected, durationMs, nextDue: result.nextDue },
+          { key: entry.key, card, correct: result.correct, expected: result.expected, durationMs, nextDue: result.nextDue },
         ]);
         this.feedback.update((f) => f && { ...f, correct: result.correct, expected: result.expected, saving: false });
         this.pendingSave = null;

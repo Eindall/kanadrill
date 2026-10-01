@@ -1,28 +1,30 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { fsrs, generatorParameters, type Grade } from 'ts-fsrs';
-import { DataSource, In, LessThanOrEqual, Not, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import {
   CARD_STATE,
   isRomajiCorrect,
+  SESSION_TYPES,
   type ItemDto,
+  type ItemType,
+  type ReviewOverviewDto,
   type ReviewResultDto,
   type ReviewSessionDto,
   type SessionCardDto,
+  type SessionConfig,
   type SubmitReviewRequest,
 } from '@kanadrill/shared';
 import { DEFAULT_TIMEZONE } from '../config/env';
 import { User } from '../users/user.entity';
 import { buildChoices } from './choices';
+import { composeSession, pickMode, type CardOrigin } from './compose-session';
 import { applyCard, toCard } from './fsrs-card';
 import { gradeAnswer } from './grading';
 import { Item } from './item.entity';
 import { ReviewLog } from './review-log.entity';
 import { UserItem } from './user-item.entity';
-
-/** Plafond de cartes dues par session (garde-fou si l'utilisateur revient après une longue pause). */
-export const MAX_DUE_PER_SESSION = 100;
 
 @Injectable()
 export class ReviewsService {
@@ -39,62 +41,80 @@ export class ReviewsService {
     this.timezone = config.get<string>('APP_TIMEZONE') || DEFAULT_TIMEZONE;
   }
 
-  /** Cartes dues, puis nouvelles cartes dans la limite quotidienne restante. N'écrit rien. */
-  async getSession(userId: string, now = new Date()): Promise<ReviewSessionDto> {
-    const user = await this.users.findOneByOrFail({ id: userId });
+  /**
+   * Compose une session selon le réglage choisi au lancement (taille, types, exercices). N'écrit rien :
+   * le `UserItem` d'une carte jamais vue n'est créé qu'à sa première réponse.
+   */
+  async getSession(userId: string, config: SessionConfig, now = new Date()): Promise<ReviewSessionDto> {
+    const items = await this.items.find({ where: { type: In(config.types) } });
+    const states = await this.userItems.find({ where: { userId, itemId: In(items.map((item) => item.id)) } });
+    const stateByItem = new Map(states.map((userItem) => [userItem.itemId, userItem]));
 
-    const due = await this.userItems.find({
-      where: { userId, state: Not(CARD_STATE.New), due: LessThanOrEqual(now) },
-      relations: { item: true },
-      order: { due: 'ASC' },
-      take: MAX_DUE_PER_SESSION,
-    });
-
-    const newSeenToday = await this.countNewSeenToday(userId, now);
-    const remaining = Math.max(0, user.dailyNewLimit - newSeenToday);
-    const fresh =
-      remaining === 0
-        ? []
-        : await this.items
-            .createQueryBuilder('item')
-            .where(
-              'NOT EXISTS (SELECT 1 FROM user_items ui WHERE ui.item_id = item.id AND ui.user_id = :userId)',
-              { userId },
-            )
-            .orderBy('item.sortOrder', 'ASC')
-            .addOrderBy('item.character', 'ASC')
-            .take(remaining)
-            .getMany();
-
-    const entries = [
-      ...due.map((userItem) => ({ item: userItem.item, state: userItem.state, isNew: false })),
-      ...fresh.map((item) => ({ item, state: CARD_STATE.New as number, isNew: true })),
-    ];
-
-    // Leurres du QCM : les autres items du même type (une seule requête par type présent).
-    const types = [...new Set(entries.map((entry) => entry.item.type))];
-    const pools = new Map<string, Item[]>();
-    if (types.length > 0) {
-      for (const item of await this.items.find({ where: { type: In(types) } })) {
-        pools.set(item.type, [...(pools.get(item.type) ?? []), item]);
-      }
-    }
-
-    const cards = entries.map(({ item, state, isNew }): SessionCardDto => {
-      const typing = state === CARD_STATE.Review;
+    const candidates = items.map((item) => {
+      const userItem = stateByItem.get(item.id);
       return {
-        item: this.toItemDto(item),
-        mode: typing ? 'typing' : 'choice',
-        ...(typing ? {} : { choices: buildChoices(item, pools.get(item.type) ?? []) }),
-        isNew,
+        item,
+        state: userItem?.state ?? CARD_STATE.New,
+        due: userItem?.due ?? null,
+        lastReview: userItem?.lastReview ?? null,
+        sortOrder: item.sortOrder,
       };
     });
 
-    return {
-      cards,
-      counts: { due: due.length, new: fresh.length },
-      dailyNewLimit: user.dailyNewLimit,
-    };
+    const composed = composeSession(candidates, config.count, now);
+    if (composed.length === 0) throw new BadRequestException('Aucune carte disponible pour cette sélection.');
+
+    // Leurres du QCM : les autres items du même type.
+    const pools = new Map<string, Item[]>();
+    for (const item of items) pools.set(item.type, [...(pools.get(item.type) ?? []), item]);
+
+    const cards = composed.map(({ candidate, origin }): SessionCardDto => {
+      const mode = pickMode(config.modes);
+      return {
+        item: this.toItemDto(candidate.item),
+        mode,
+        ...(mode === 'choice' ? { choices: buildChoices(candidate.item, pools.get(candidate.item.type) ?? []) } : {}),
+        isNew: origin === 'new',
+      };
+    });
+
+    const count = (origin: CardOrigin) => composed.filter((card) => card.origin === origin).length;
+    return { cards, counts: { due: count('due'), new: count('new'), extra: count('extra') } };
+  }
+
+  /** Ce que l'écran de réglage et l'accueil affichent : cartes disponibles par type, objectif du jour. */
+  async getOverview(userId: string, now = new Date()): Promise<ReviewOverviewDto> {
+    const user = await this.users.findOneByOrFail({ id: userId });
+
+    const totals: Array<{ type: ItemType; count: string }> = await this.items
+      .createQueryBuilder('item')
+      .select('item.type', 'type')
+      .addSelect('count(*)', 'count')
+      .where('item.type IN (:...types)', { types: SESSION_TYPES })
+      .groupBy('item.type')
+      .getRawMany();
+    const dues: Array<{ type: ItemType; count: string }> = await this.userItems
+      .createQueryBuilder('ui')
+      .innerJoin('ui.item', 'item')
+      .select('item.type', 'type')
+      .addSelect('count(*)', 'count')
+      .where('ui.userId = :userId AND ui.state <> :isNew AND ui.due <= :now', {
+        userId,
+        isNew: CARD_STATE.New,
+        now,
+      })
+      .andWhere('item.type IN (:...types)', { types: SESSION_TYPES })
+      .groupBy('item.type')
+      .getRawMany();
+
+    const available: ReviewOverviewDto['available'] = {};
+    for (const type of SESSION_TYPES) {
+      available[type] = {
+        total: Number(totals.find((row) => row.type === type)?.count ?? 0),
+        due: Number(dues.find((row) => row.type === type)?.count ?? 0),
+      };
+    }
+    return { available, answersToday: await this.countAnswersToday(userId, now), dailyGoal: user.dailyGoal };
   }
 
   /** Corrige la réponse, la note, fait avancer la carte FSRS et journalise — en une transaction. */
@@ -144,13 +164,13 @@ export class ReviewsService {
     return { correct, expected: item.readings[0], rating, nextDue: nextDue.toISOString() };
   }
 
-  /** Nouvelles cartes déjà introduites aujourd'hui : réponses dont la carte était « New », depuis minuit. */
-  private async countNewSeenToday(userId: string, now: Date): Promise<number> {
+  /** Réponses données depuis minuit (dans `APP_TIMEZONE`), réussies ou non : ce que mesure l'objectif quotidien. */
+  private async countAnswersToday(userId: string, now: Date): Promise<number> {
     const rows: Array<{ count: string }> = await this.dataSource.query(
       `SELECT count(*) AS count FROM review_logs
-       WHERE user_id = $1 AND state = $2
-         AND reviewed_at >= (date_trunc('day', $3::timestamptz AT TIME ZONE $4) AT TIME ZONE $4)`,
-      [userId, CARD_STATE.New, now, this.timezone],
+       WHERE user_id = $1
+         AND reviewed_at >= (date_trunc('day', $2::timestamptz AT TIME ZONE $3) AT TIME ZONE $3)`,
+      [userId, now, this.timezone],
     );
     return Number(rows[0].count);
   }

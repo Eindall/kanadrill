@@ -35,6 +35,11 @@ export class AuthService {
     this.user.set(await firstValueFrom(this.http.patch<UserDto>('/api/users/me', body)));
   }
 
+  async updateDailyGoal(dailyGoal: number): Promise<void> {
+    const body: UpdateProfileRequest = { dailyGoal };
+    this.user.set(await firstValueFrom(this.http.patch<UserDto>('/api/users/me', body)));
+  }
+
   async logout(): Promise<void> {
     await firstValueFrom(this.http.post<void>('/api/auth/logout', {}));
     this.user.set(null);

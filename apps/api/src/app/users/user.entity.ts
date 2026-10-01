@@ -10,7 +10,7 @@ import {
 import { AuthIdentity } from './auth-identity.entity';
 
 @Entity('users')
-@Check('"daily_new_limit" BETWEEN 0 AND 100')
+@Check('"daily_goal" BETWEEN 1 AND 500')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -23,11 +23,11 @@ export class User {
   avatarUrl!: string | null;
 
   /**
-   * Nombre maximum de nouvelles cartes introduites par jour (= DEFAULT_DAILY_NEW_LIMIT de libs/shared ;
+   * Objectif quotidien : nombre de cartes à tenter par jour (= DEFAULT_DAILY_GOAL de libs/shared ;
    * pas d'import de valeur ici : la CLI TypeORM ne résout pas `@kanadrill/shared`).
    */
-  @Column({ name: 'daily_new_limit', type: 'smallint', default: 10 })
-  dailyNewLimit!: number;
+  @Column({ name: 'daily_goal', type: 'smallint', default: 30 })
+  dailyGoal!: number;
 
   @OneToMany(() => AuthIdentity, (identity) => identity.user)
   identities!: AuthIdentity[];

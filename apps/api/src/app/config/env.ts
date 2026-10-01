@@ -30,5 +30,5 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   return config;
 }
 
-/** Fuseau qui définit le « jour » des révisions (limite quotidienne de nouvelles cartes). */
+/** Fuseau qui définit le « jour » des révisions (objectif quotidien de cartes tentées). */
 export const DEFAULT_TIMEZONE = 'Europe/Paris';

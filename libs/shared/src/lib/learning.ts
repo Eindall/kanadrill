@@ -22,9 +22,18 @@ export interface ItemDto {
   meanings: string[];
 }
 
-/** Limite quotidienne de nouvelles cartes : valeur par défaut et bornes (modifiable par utilisateur). */
-export const DEFAULT_DAILY_NEW_LIMIT = 10;
-export const MAX_DAILY_NEW_LIMIT = 100;
+/** Objectif quotidien (nombre de cartes à tenter par jour) : défaut et bornes, modifiable par utilisateur. */
+export const DEFAULT_DAILY_GOAL = 30;
+export const MIN_DAILY_GOAL = 1;
+export const MAX_DAILY_GOAL = 500;
+
+/** Tailles de session proposées. */
+export const SESSION_SIZES = [15, 30, 50] as const;
+export type SessionSize = (typeof SESSION_SIZES)[number];
+export const DEFAULT_SESSION_SIZE: SessionSize = 30;
+
+/** Types que l'on peut cocher pour une session (« kanji » s'ajoutera avec le dictionnaire perso). */
+export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana'];
 
 /** QCM (retrouver la lecture parmi des propositions) ou saisie libre du romaji. */
 export type ReviewMode = 'choice' | 'typing';
@@ -42,10 +51,30 @@ export interface SessionCardDto {
   isNew: boolean;
 }
 
+/** Réglage d'une session, choisi à chaque lancement. */
+export interface SessionConfig {
+  count: SessionSize;
+  types: ItemType[];
+  modes: ReviewMode[];
+}
+
 export interface ReviewSessionDto {
   cards: SessionCardDto[];
-  counts: { due: number; new: number };
-  dailyNewLimit: number;
+  /** D'où viennent les cartes : dues, jamais vues, ou déjà vues et reposées pour compléter. */
+  counts: { due: number; new: number; extra: number };
+}
+
+/** Cartes disponibles pour un type d'item (ce que l'écran de réglage affiche). */
+export interface TypeAvailability {
+  total: number;
+  due: number;
+}
+
+export interface ReviewOverviewDto {
+  available: Partial<Record<ItemType, TypeAvailability>>;
+  /** Réponses données aujourd'hui, réussies ou non. */
+  answersToday: number;
+  dailyGoal: number;
 }
 
 export interface SubmitReviewRequest {
