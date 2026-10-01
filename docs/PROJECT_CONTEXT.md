@@ -12,6 +12,11 @@
 - **Mobile friendly** (usage quotidien sur téléphone).
 - **Multi-utilisateurs** : quelques amis qui parlent japonais pourront s'inscrire librement, chacun avec ses propres kanjis et sa propre progression.
 - Les kanjis doivent pouvoir s'ajouter **automatiquement** (on saisit le caractère, les lectures et le sens se remplissent seuls).
+- **Pas de limite quotidienne de nouvelles cartes** (décision du propriétaire). Le fonctionnement visé :
+  1. un mode **« Apprendre »** : on lit la « page » (fiche détail : lectures, sens, ordre des traits…) de chaque kana et de chaque kanji ; les kanji s'**ajoutent à son dictionnaire perso**, les kana y sont **d'office** ;
+  2. des **sessions** que l'on lance autant de fois qu'on veut, **paramétrées à chaque lancement** : nombre de cartes (15 / 30 / 50), types (hiragana, katakana, kanji : cases à cocher ; un type coché = **tous** ses éléments, on ne choisit pas kana par kana), exercices (QCM, texte libre, tracé : cases à cocher, tracé **réservé au mobile**) ;
+  3. un **objectif quotidien** réglable dans le profil (« je veux tenter X cartes aujourd'hui »), affiché sur l'accueil avec une jauge de remplissage en %. Seul compte le nombre de cartes **tentées** : réussites et échecs sont indifférents.
+  Ce parcours sera mis en place quand les kanji arriveront (voir § 3 « Cible » et § 5).
 
 ## 2. Décisions prises
 
@@ -28,6 +33,9 @@
 | Répétition espacée | **FSRS** (lib `ts-fsrs`) | Plus efficace que SM-2 (moins de révisions pour une même rétention), calibrable par utilisateur grâce aux `ReviewLog`. |
 | Kanjis | Import **local** de KANJIDIC2 (lectures, sens, niveau JLPT, traits) + **KanjiVG** (ordre des traits) | Pas de dépendance à une API externe susceptible de tomber. Licences CC BY-SA : prévoir une mention dans l'app. |
 | Exercices | QCM + saisie du romaji dès la v1 ; **dessin du caractère sur mobile en v2** | Reconnaissance automatique du tracé = gros chantier ; v2 = canvas + modèle KanjiVG + auto-évaluation. |
+| Nouvelles cartes | **Pas de limite quotidienne** ; c'est le **dictionnaire perso** qui joue ce rôle pour les kanji (une carte n'entre en révision que si l'utilisateur l'a ajoutée). **Les kana sont d'office dans le dictionnaire** : cocher « hiragana » = tous les hiragana, sinon aucun | Choix du propriétaire. Écarté : limite de N nouvelles cartes par jour (implémentée à l'étape 4 comme solution **transitoire**, à retirer, voir § 3). |
+| Sessions | **Paramétrées à chaque lancement** (nombre de cartes, types, exercices), illimitées en nombre. Si la sélection ne contient pas assez de cartes, on **cycle** celles qui existent pour atteindre le nombre demandé | Remplace le choix automatique du mode selon l'état de la carte (QCM pour les nouvelles, saisie pour les cartes en révision). |
+| Objectif quotidien | Réglage **par utilisateur** dans le profil (nombre de cartes à tenter par jour), jauge en % sur l'accueil. Compte les **réponses données** aujourd'hui, **réussies ou non** | C'est un objectif de motivation, **pas une limite** : on peut le dépasser et lancer d'autres sessions. Une session de 30 cartes valide un objectif de 30, quel que soit le résultat. |
 | Déploiement | `docker compose` (db + api + web/nginx), à placer **derrière le reverse proxy du VPS** | Seul le conteneur `web` est exposé, sur 127.0.0.1. |
 
 ## 3. Architecture
@@ -53,15 +61,30 @@ libs/shared         Types et constantes partagés (UserDto, règles du pseudo, f
 - Les valeurs de `Rating` / `State` sont recopiées dans `libs/shared` (`REVIEW_RATING`, `CARD_STATE`) ; un test vérifie qu'elles restent égales à celles de ts-fsrs.
 - **Seed** : `SeedService` (`OnApplicationBootstrap`) fait un upsert idempotent des kana à chaque démarrage, après les migrations. Données dans `learning/seed/kana.data.ts` (hiragana + lectures ; le katakana en est dérivé par décalage Unicode). 104 kana par écriture : base 46 (ん et を inclus) + dakuten/handakuten 25 + yōon 33. Hors périmètre : kana rares (ゐ ゑ ヴ) et extensions katakana (ファ…). Corriger une lecture = modifier le fichier de données, pas de migration.
 
-### Session de révision (implémentée, `learning/reviews.*`)
+### Session de révision (implémentée, `learning/reviews.*`) — version transitoire
+
+> Cette version (limite quotidienne, mode imposé par l'état de la carte, tous les kana d'office) est une **étape intermédiaire** : elle sera remplacée par le modèle décrit dans « Cible » ci-dessous. Ce qui reste valable : correction du romaji, notation, FSRS, `ReviewLog`, file côté front, bilan.
 
 - `GET /api/reviews/session` : cartes **dues** (`state != New`, `due <= now`, les plus anciennes d'abord, 100 max), puis **nouvelles cartes** (items sans `UserItem`, par `items.sort_order`) dans la limite `users.daily_new_limit` (défaut 10, 0–100, modifiable via `PATCH /users/me { dailyNewLimit }`) moins les nouvelles cartes déjà vues aujourd'hui (`review_logs.state = New` depuis minuit). Le « jour » suit `APP_TIMEZONE` (défaut `Europe/Paris`). Le GET n'écrit rien : le `UserItem` est créé à la première réponse.
 - Mode : QCM (4 propositions, leurres = autres items du même type, jamais une réponse aussi valable comme « o » pour お/を) pour les cartes New/Learning/Relearning ; saisie du romaji pour les cartes en Review.
 - `POST /api/reviews { itemId, mode, answer, durationMs }` : le **serveur corrige** (`isRomajiCorrect`), déduit la note (`grading.ts`), puis, en une transaction, verrouille/crée le `UserItem`, écrit le `ReviewLog` (snapshot avant réponse) et applique FSRS (`enable_fuzz`). Notes : faux → Again ; juste → Good ; juste et > 8 s → Hard ; juste, **saisie** et < 2,5 s → Easy (jamais Easy au QCM). `durationMs` est plafonné à 120 s.
 - Correction du romaji dans `libs/shared/src/lib/romaji.ts` (partagée API/front) : normalisation (casse, espaces, tirets, apostrophes) + variantes Hepburn / Nihon-shiki (shi/si, chi/ti, tsu/tu, fu/hu, ji/zi, sha/sya, cha/tya, ja/jya/zya, n/nn…). Les `readings` du seed contiennent déjà certaines variantes ; les règles complètent.
 - Front (`features/review`) : une carte à la fois, grand caractère, retour immédiat calculé localement (le serveur fait foi ensuite), une carte **ratée est remise en fin de file** (`review-queue.ts`), bilan final (cartes, réussite sur première réponse, temps moyen, cartes à retravailler, prochaine échéance). Accueil : bouton « Commencer la session ».
-- **Limites connues** : `POST /reviews` n'est pas idempotent (un renvoi réseau compterait deux révisions) ; une bonne réponse à une carte en apprentissage n'est pas reposée dans la session (seules les ratées le sont) ; pas encore de réglage de la limite quotidienne dans l'interface (API seulement) ; les katakana arrivent après tous les hiragana (`sort_order`).
-- Le front n'a pas été vérifié à l'écran avec une vraie connexion Discord (build et tests unitaires OK ; l'API est couverte par `reviews.integration.spec.ts`).
+- **Limites connues** : `POST /reviews` n'est pas idempotent (un renvoi réseau compterait deux révisions) ; une bonne réponse à une carte en apprentissage n'est pas reposée dans la session (seules les ratées le sont) ; les katakana arrivent après tous les hiragana (`sort_order`).
+- Le flux a été essayé à la main avec une vraie connexion Discord (OK) ; l'API est couverte par `reviews.integration.spec.ts`.
+
+### Cible : dictionnaire perso, sessions paramétrées, objectif quotidien (à faire avec les kanji)
+
+Ce que cela change dans le modèle, par rapport à l'étape 4 :
+
+- **Dictionnaire perso = tous les kana + les kanji ajoutés.** Les **kana sont d'office** dans le dictionnaire de chacun (pas de bouton d'ajout, pas de sélection kana par kana : un type coché = tous ses éléments). Les **kanji** n'y entrent que sur ajout explicite (`POST` / `DELETE` sur le dictionnaire) : l'ajout crée le `UserItem` (état `New`, `due = now`). Un kana jamais révisé reste, lui, sans `UserItem` jusqu'à sa première réponse (création paresseuse, comme aujourd'hui) : **aucun rattrapage à prévoir** quand de nouveaux kana sont ajoutés au seed, ni à la création d'un compte. Les cartes éligibles d'une session = les items des types cochés qui sont des kana, ou des kanji ayant un `UserItem`.
+- **Mode « Apprendre »** : catalogue de **tous** les éléments, kana compris (grille par écriture et par groupe : base, dakuten, yōon…), avec une **fiche détail** par élément : caractère, lectures (on/kun pour un kanji), sens, niveau JLPT, **ordre des traits animé** (KanjiVG, qui couvre aussi les kana). Sur une fiche kanji : bouton « Ajouter à mon dictionnaire » (ou retirer). Sur une fiche kana : pas de bouton, le kana y est déjà. Pour les kanji, l'ajout par caractère remplit tout seul la page (KANJIDIC2).
+- **Session paramétrée** : écran de réglage (15 / 30 / 50 cartes, cases hiragana / katakana / kanji, cases QCM / texte libre / tracé) puis lancement. La requête de session porte ces paramètres (`count`, `types[]`, `modes[]`) ; le serveur compose la liste de `count` cartes (cartes dues d'abord, puis cartes jamais vues, puis **cycle** des cartes de la sélection, voir plus bas) et attribue à chaque carte l'un des modes cochés. Le **tracé** n'est proposé que sur appareil tactile et seulement pour les items qui ont des données de traits (KanjiVG couvre aussi les kana).
+- **Objectif quotidien** : `users.daily_goal` (nombre de cartes à tenter par jour) remplace `users.daily_new_limit`. L'accueil affiche `réponses d'aujourd'hui / objectif` en pourcentage, plafonné à 100 % à l'affichage (jour calculé avec `APP_TIMEZONE`, comme aujourd'hui). On compte les **lignes de `review_logs`** du jour, **réussies ou non** ; une session abandonnée compte ce qui a été répondu ; une carte ratée puis reposée dans la session compte à chaque réponse (la session de 30 cartes valide donc bien un objectif de 30, quitte à le dépasser un peu). L'objectif n'empêche rien.
+- **Cycle quand la sélection est trop petite** (ex. 30 cartes demandées, 12 disponibles) : c'est possible. Le serveur complète en repassant sur les cartes de la sélection, la moins récemment vue d'abord, en tours successifs, sans jamais poser deux fois de suite la même carte (sauf s'il n'y en a qu'une). Ces cartes de complément sont traitées **comme n'importe quelle réponse** : elles comptent pour l'objectif, apparaissent dans le bilan, **mettent à jour la carte FSRS** et écrivent un `ReviewLog` normal (pas de colonne ni d'indicateur « entraînement »). Décision du propriétaire : perdre un peu en précision de planification (cartes revues avant leur échéance ou à quelques minutes d'écart) est acceptable ; ts-fsrs gère les révisions anticipées. Si la sélection est **vide** (ex. seulement « kanji » coché avec un dictionnaire sans kanji), le lancement est refusé avec un message, et l'écran de réglage indique le nombre de cartes disponibles par type.
+- À retirer le moment venu : `users.daily_new_limit` (colonne, `PATCH /users/me { dailyNewLimit }`, constantes `DEFAULT_DAILY_NEW_LIMIT` / `MAX_DAILY_NEW_LIMIT`), le calcul « nouvelles cartes déjà vues aujourd'hui », et le choix du mode selon l'état de la carte. `items.sort_order` peut rester pour ordonner les listes du mode « Apprendre ».
+
+Aucune question ouverte pour ce parcours : prêt à être découpé en étapes.
 
 ## 4. État actuel
 
@@ -81,10 +104,10 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 1. ~~Monorepo, Docker, auth Discord, profil~~ (fait).
 2. **Table de tokens de session** (demandée par le propriétaire « par sécurité ») : stocker chaque session (id/`jti`, utilisateur, empreinte, expiration, révocation, dernière utilisation), faire valider le JWT contre cette table dans `JwtAuthGuard`, permettre la déconnexion réelle et la révocation. Prévoir aussi le nettoyage des sessions expirées.
 3. ~~Schéma `Item` / `UserItem` / `ReviewLog` + données de base hiragana et katakana~~ (fait).
-4. ~~Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session quotidienne~~ (fait). Reste à envisager : réglage de la limite quotidienne dans le profil, idempotence du POST.
+4. ~~Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session quotidienne~~ (fait, version transitoire avec limite quotidienne). Reste à envisager : idempotence du POST.
 5. Statistiques, installation PWA (manifest, service worker).
-6. Kanjis : import KANJIDIC2, ajout par caractère, listes personnelles par utilisateur, ordre des traits (KanjiVG).
-7. Dessin du caractère sur mobile (canvas + auto-évaluation), puis éventuelle vérification automatique.
+6. Kanjis et nouveau parcours (voir § 3 « Cible ») : import KANJIDIC2 + ajout par caractère ; ordre des traits (KanjiVG) ; **dictionnaire perso** (kanji) et mode « Apprendre » avec **fiches détail kana et kanji** (ordre des traits) ; **sessions paramétrées** (nombre de cartes, types, exercices) ; **objectif quotidien** dans le profil + jauge sur l'accueil ; suppression de la limite quotidienne de l'étape 4. Découpage possible : d'abord sessions paramétrées (types hiragana / katakana, QCM / texte libre, cycle) + objectif quotidien (déjà utilisables avec les kana), puis KanjiVG et les fiches détail (kana puis kanji), puis dictionnaire et kanji.
+7. Exercice de **tracé** sur mobile (canvas + auto-évaluation, option « tracé » des sessions, tactile uniquement), puis éventuelle vérification automatique.
 8. Idée : bot Discord (rappels de révision en DM, commandes slash) ; mention des licences KANJIDIC2 / KanjiVG dans l'app.
 
 ## 6. Conventions
