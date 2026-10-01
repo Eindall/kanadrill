@@ -8,8 +8,11 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
+  type SessionInfoDto,
 } from '@kanadrill/shared';
 import { AuthService } from '../../core/auth.service';
+import { relativeTime } from '../../core/relative-time';
+import { SessionsService } from '../../core/sessions.service';
 
 const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
 
@@ -97,6 +100,56 @@ const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
           }
         </section>
 
+        <section class="flex flex-col gap-3" aria-labelledby="sessions-label">
+          <h2 id="sessions-label" class="text-lg font-medium">Appareils connectés</h2>
+          <p class="text-sm text-ink-soft">
+            Tu restes connecté tant que tu t'en sers au moins une fois toutes les 48&nbsp;h, dans la limite de
+            30&nbsp;jours d'affilée.
+          </p>
+          @if (sessionsError()) {
+            <p role="alert" class="text-sm text-seal">{{ sessionsError() }}</p>
+          }
+          @if (sessions(); as list) {
+            <ul class="divide-y divide-line border border-line bg-paper">
+              @for (item of list; track item.id) {
+                <li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                  <div class="min-w-0">
+                    <p class="flex flex-wrap items-center gap-2">
+                      <span class="font-medium">{{ item.device }}</span>
+                      @if (item.current) {
+                        <span class="bg-ink px-2 py-0.5 text-xs font-medium text-paper">Cet appareil</span>
+                      }
+                    </p>
+                    <p class="text-sm text-ink-soft">Dernière activité : {{ relative(item.lastUsedAt) }}</p>
+                  </div>
+                  @if (!item.current) {
+                    <button
+                      type="button"
+                      (click)="revokeSession(item)"
+                      [disabled]="sessionsBusy()"
+                      class="text-sm text-seal underline underline-offset-4 disabled:opacity-40"
+                    >
+                      Déconnecter
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+            @if (list.length > 1) {
+              <button
+                type="button"
+                (click)="revokeOtherSessions()"
+                [disabled]="sessionsBusy()"
+                class="self-start border border-ink px-5 py-2.5 font-medium transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+              >
+                Déconnecter tous les autres appareils
+              </button>
+            }
+          } @else if (!sessionsError()) {
+            <p role="status" class="text-sm text-ink-soft">Chargement…</p>
+          }
+        </section>
+
         <section class="flex flex-col gap-3" aria-labelledby="connections-label">
           <h2 id="connections-label" class="text-lg font-medium">Connexions</h2>
           <ul class="divide-y divide-line border border-line bg-paper">
@@ -144,6 +197,7 @@ const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
 export class ProfilePage {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly sessionsApi = inject(SessionsService);
 
   protected readonly min = USERNAME_MIN_LENGTH;
   protected readonly max = USERNAME_MAX_LENGTH;
@@ -173,6 +227,10 @@ export class ProfilePage {
   protected readonly goalSaved = signal(false);
   protected readonly goalError = signal<string | null>(null);
 
+  protected readonly sessions = signal<SessionInfoDto[] | null>(null);
+  protected readonly sessionsError = signal<string | null>(null);
+  protected readonly sessionsBusy = signal(false);
+
   protected readonly saving = signal(false);
   protected readonly saved = signal(false);
   protected readonly saveError = signal<string | null>(null);
@@ -189,6 +247,7 @@ export class ProfilePage {
         this.goal.setValue(user.dailyGoal);
       }
     });
+    void this.loadSessions();
   }
 
   protected providerLabel(provider: string): string {
@@ -228,6 +287,39 @@ export class ProfilePage {
     } finally {
       this.goalSaving.set(false);
     }
+  }
+
+  protected relative(date: string): string {
+    return relativeTime(date);
+  }
+
+  private async loadSessions(): Promise<void> {
+    try {
+      this.sessions.set(await this.sessionsApi.list());
+      this.sessionsError.set(null);
+    } catch {
+      this.sessionsError.set('Impossible de charger la liste des appareils.');
+    }
+  }
+
+  protected async revokeSession(session: SessionInfoDto): Promise<void> {
+    await this.runSessionAction(() => this.sessionsApi.revoke(session.id));
+  }
+
+  protected async revokeOtherSessions(): Promise<void> {
+    await this.runSessionAction(() => this.sessionsApi.revokeOthers());
+  }
+
+  private async runSessionAction(action: () => Promise<void>): Promise<void> {
+    this.sessionsBusy.set(true);
+    try {
+      await action();
+    } catch {
+      this.sessionsError.set("L'appareil n'a pas pu être déconnecté. Réessaie.");
+    } finally {
+      this.sessionsBusy.set(false);
+    }
+    await this.loadSessions();
   }
 
   protected async logout(): Promise<void> {

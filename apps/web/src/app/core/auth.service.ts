@@ -40,6 +40,11 @@ export class AuthService {
     this.user.set(await firstValueFrom(this.http.patch<UserDto>('/api/users/me', body)));
   }
 
+  /** Oublie l'utilisateur côté front (session expirée ou révoquée : le serveur a déjà répondu 401). */
+  clearUser(): void {
+    this.user.set(null);
+  }
+
   async logout(): Promise<void> {
     await firstValueFrom(this.http.post<void>('/api/auth/logout', {}));
     this.user.set(null);

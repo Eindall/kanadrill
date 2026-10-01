@@ -3,14 +3,17 @@ import type { Response } from 'express';
 import type { UserDto } from '@kanadrill/shared';
 import { CurrentUserId } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { SESSION_COOKIE } from '../auth/session';
+import { SessionService } from '../auth/session.service';
 import { UpdateProfileDto } from './update-profile.dto';
 import { UsersService } from './users.service';
 
 @Controller('users/me')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly sessions: SessionService,
+  ) {}
 
   @Get()
   async me(@CurrentUserId() userId: string): Promise<UserDto> {
@@ -26,6 +29,6 @@ export class UsersController {
   @HttpCode(204)
   async remove(@CurrentUserId() userId: string, @Res({ passthrough: true }) res: Response): Promise<void> {
     await this.users.remove(userId);
-    res.clearCookie(SESSION_COOKIE, { path: '/' });
+    this.sessions.clearCookie(res);
   }
 }

@@ -12,6 +12,7 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../app.module';
+import { assertTestDatabase } from '../testing/assert-test-database';
 import { DiscordStrategy } from './discord.strategy';
 
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
@@ -50,6 +51,7 @@ const APP_URL = 'http://localhost:4200';
     app.get(DiscordStrategy).userProfile = (_token, done) =>
       done(null, { id: '123456789012345678', username: 'thomas', global_name: 'Thomas', avatar: null });
 
+    assertTestDatabase(app.get(DataSource)); // jamais la base du .env
     await app.get(DataSource).query('TRUNCATE users CASCADE');
   }, 60_000);
 
@@ -99,7 +101,11 @@ const APP_URL = 'http://localhost:4200';
         headers: { cookie: getCookie(start, 'kd_oauth_state') as string },
       });
       expect(res.headers.get('location')).toBe(`${APP_URL}/`);
-      expect(res.headers.getSetCookie().find((c) => c.startsWith('kd_session='))).toContain('HttpOnly');
+      const setCookie = res.headers.getSetCookie().find((c) => c.startsWith('kd_session=')) as string;
+      expect(setCookie).toContain('HttpOnly');
+      // Cookie à durée glissante : 48 h sans usage (et non plus 30 jours d'office).
+      expect(Number(/Max-Age=(\d+)/.exec(setCookie)?.[1])).toBeGreaterThan(172_790);
+      expect(Number(/Max-Age=(\d+)/.exec(setCookie)?.[1])).toBeLessThanOrEqual(172_800);
       return getCookie(res, 'kd_session') as string;
     };
 
@@ -113,6 +119,8 @@ const APP_URL = 'http://localhost:4200';
     const meAgain = await (await fetch(`${base}/api/users/me`, { headers: { cookie: secondSession } })).json();
     expect(meAgain.id).toBe(me.id);
     expect((await app.get(DataSource).query('SELECT count(*) FROM users'))[0].count).toBe('1');
+    // Chaque connexion ouvre sa propre session en base (un appareil = une ligne).
+    expect((await app.get(DataSource).query('SELECT count(*) FROM auth_sessions'))[0].count).toBe('2');
 
     const patch = (username: string) =>
       fetch(`${base}/api/users/me`, {
@@ -125,7 +133,9 @@ const APP_URL = 'http://localhost:4200';
 
     // La suppression du compte efface aussi ses identités.
     expect((await fetch(`${base}/api/users/me`, { method: 'DELETE', headers: { cookie: session } })).status).toBe(204);
-    const counts = await app.get(DataSource).query('SELECT (SELECT count(*) FROM users) u, (SELECT count(*) FROM auth_identities) i');
-    expect(counts[0]).toEqual({ u: '0', i: '0' });
+    const counts = await app.get(DataSource).query(
+      'SELECT (SELECT count(*) FROM users) u, (SELECT count(*) FROM auth_identities) i, (SELECT count(*) FROM auth_sessions) s',
+    );
+    expect(counts[0]).toEqual({ u: '0', i: '0', s: '0' });
   });
 });

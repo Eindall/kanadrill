@@ -5,3 +5,8 @@ import type { AuthenticatedRequest } from './jwt-auth.guard';
 export const CurrentUserId = createParamDecorator((_data: unknown, ctx: ExecutionContext): string => {
   return ctx.switchToHttp().getRequest<AuthenticatedRequest>().userId;
 });
+
+/** Injecte l'ID de la session courante (le `jti` du cookie), derrière JwtAuthGuard. */
+export const CurrentSessionId = createParamDecorator((_data: unknown, ctx: ExecutionContext): string => {
+  return ctx.switchToHttp().getRequest<AuthenticatedRequest>().sessionId;
+});

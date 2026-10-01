@@ -56,11 +56,14 @@ npm run migration:revert      # annuler la dernière
 
 ```bash
 npm run test
-# Tests d'intégration (auth avec Discord simulé, schéma d'apprentissage et seed), sur une vraie base.
-# ATTENTION : ils vident les tables `users` et `items` de la base indiquée.
-# Les kana sont chargés automatiquement au démarrage de l'API (aucune commande de seed).
+# Tests d'intégration (auth avec Discord simulé, sessions, apprentissage, révisions), sur une vraie base.
+# ATTENTION : ils vident la table `users` de la base indiquée. Son nom doit contenir « test » (sinon les tests
+# refusent de démarrer) et ce ne doit JAMAIS être ta base de dev. À créer une fois :
+docker compose -f docker-compose.dev.yml exec db createdb -U kanadrill kanadrill_test
 TEST_DATABASE_URL=postgres://kanadrill:devpass@127.0.0.1:5432/kanadrill_test npx nx test api
 ```
+
+Sans `TEST_DATABASE_URL`, les tests d'intégration sont simplement ignorés. Les kana sont chargés automatiquement au démarrage de l'API (aucune commande de seed).
 
 ## 3. Production (VPS)
 
@@ -75,13 +78,20 @@ docker compose up -d --build
 - Mise à jour : `git pull && docker compose up -d --build`. Les migrations s'appliquent au démarrage de l'API.
 - Santé : `GET /api/health` (vérifie aussi la base), utilisable avec Uptime Kuma.
 
-### Sauvegarde de la base
+### Sauvegarde et restauration de la base
 
 ```bash
-docker compose exec db pg_dump -U kanadrill kanadrill > kanadrill-$(date +%F).sql
+scripts/backup-db.sh                       # crée backups/kanadrill-AAAA-MM-JJ-HHMMSS.dump (compressé), garde les 14 dernières
+scripts/restore-db.sh backups/kanadrill-….dump   # REMPLACE les données ; arrête l'API pendant la restauration, puis la relance
 ```
+
+- Le dump est vérifié (relu avec `pg_restore --list`) avant de remplacer une sauvegarde valide. Les fichiers sont lisibles par toi seul (ils contiennent des identifiants Discord) et `backups/` est ignoré par git.
+- Variables : `BACKUP_DIR` (dossier), `KEEP` (nombre conservé), `COMPOSE_FILE` (par défaut `docker-compose.yml`).
+- Planifier (cron, tous les jours à 3 h) : `0 3 * * * cd /chemin/vers/kanadrill && scripts/backup-db.sh >> backups/backup.log 2>&1`.
+- **Une sauvegarde sur le même disque que la base ne protège pas d'une panne du VPS** : copie régulièrement `backups/` ailleurs (`rsync`, `rclone`, ou le stockage de ton hébergeur).
+- Teste ta restauration une fois, avant d'en avoir besoin : crée une base vide (`createdb`), puis `TARGET_DB=ma_base_vide scripts/restore-db.sh fichier.dump`.
 
 ## Sécurité : à savoir
 
-- Session = JWT dans un cookie httpOnly valable 30 jours, **non révocable pour l'instant** (une table de tokens est prévue, voir la feuille de route).
+- Session = JWT dans un cookie httpOnly, relié à une ligne de la table `auth_sessions` : tu restes connecté tant que tu t'en sers au moins une fois toutes les **48 h** (30 jours d'affilée au maximum). La déconnexion révoque réellement la session ; le profil liste les appareils connectés et permet de les déconnecter.
 - L'inscription est libre : toute personne ayant un compte Discord peut créer un compte. Les requêtes sont limitées par IP (100/min en général, 20/min sur l'authentification).

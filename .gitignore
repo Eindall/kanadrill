@@ -51,3 +51,6 @@ vitest.config.*.timestamp*
 .env
 .env.*
 !.env.example
+
+# Sauvegardes de la base (scripts/backup-db.sh) : données personnelles
+/backups

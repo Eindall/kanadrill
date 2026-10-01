@@ -5,7 +5,6 @@
  * (et donc ses révisions), ne la pointe jamais vers une base qui contient des données à garder.
  */
 import { ValidationPipe } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
@@ -17,7 +16,9 @@ import {
   type ReviewSessionDto,
 } from '@kanadrill/shared';
 import { AppModule } from '../app.module';
+import { assertTestDatabase } from '../testing/assert-test-database';
 import { SESSION_COOKIE } from '../auth/session';
+import { SessionService } from '../auth/session.service';
 import { Item } from './item.entity';
 import { ReviewLog } from './review-log.entity';
 import { UserItem } from './user-item.entity';
@@ -33,6 +34,9 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
   let cookieB: string;
   let userA: User;
   let userC: User;
+
+  /** Ouvre une vraie session (ligne en base + jeton) et renvoie le cookie correspondant. */
+  const loginAs = async (userId: string) => `${SESSION_COOKIE}=${(await app.get(SessionService).issue(userId)).token}`;
 
   const itemId = async (character: string) =>
     (await dataSource.getRepository(Item).findOneByOrFail({ character, type: 'hiragana' })).id;
@@ -69,15 +73,15 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     await app.listen(0);
     base = (await app.getUrl()).replace('[::1]', 'localhost');
     dataSource = app.get(DataSource);
+    assertTestDatabase(dataSource); // jamais la base du .env
     await dataSource.query('TRUNCATE users CASCADE');
 
     const users = dataSource.getRepository(User);
     userA = await users.save({ username: 'alice', avatarUrl: null });
     const userB = await users.save({ username: 'bob', avatarUrl: null });
     userC = await users.save({ username: 'carol', avatarUrl: null });
-    const jwt = app.get(JwtService);
-    cookieA = `${SESSION_COOKIE}=${await jwt.signAsync({ sub: userA.id })}`;
-    cookieB = `${SESSION_COOKIE}=${await jwt.signAsync({ sub: userB.id })}`;
+    cookieA = await loginAs(userA.id);
+    cookieB = await loginAs(userB.id);
   }, 60_000);
 
   afterAll(async () => app?.close());
@@ -229,7 +233,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
        FROM items WHERE type = 'hiragana'`,
       [userC.id],
     );
-    const cookieC = `${SESSION_COOKIE}=${await app.get(JwtService).signAsync({ sub: userC.id })}`;
+    const cookieC = await loginAs(userC.id);
     const session = await getSession(cookieC, 'count=15&types=hiragana&modes=choice');
     expect(session.counts).toEqual({ due: 0, new: 0, extra: 15 });
     expect(session.cards.every((card) => !card.isNew)).toBe(true);

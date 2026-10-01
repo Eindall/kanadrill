@@ -8,6 +8,7 @@ import { Test } from '@nestjs/testing';
 import { createEmptyCard, fsrs, Rating } from 'ts-fsrs';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../app.module';
+import { assertTestDatabase } from '../testing/assert-test-database';
 import { applyCard, toCard } from './fsrs-card';
 import { Item } from './item.entity';
 import { ReviewLog } from './review-log.entity';
@@ -40,6 +41,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     await app.init();
     dataSource = app.get(DataSource);
     close = () => app.close();
+    assertTestDatabase(dataSource); // jamais la base du .env
     await dataSource.query('TRUNCATE users CASCADE');
   }, 60_000);
 
