@@ -56,7 +56,9 @@ npm run migration:revert      # annuler la dernière
 
 ```bash
 npm run test
-# Test d'intégration de l'auth (Discord simulé, vraie base). ATTENTION : il vide la table `users` de la base indiquée.
+# Tests d'intégration (auth avec Discord simulé, schéma d'apprentissage et seed), sur une vraie base.
+# ATTENTION : ils vident les tables `users` et `items` de la base indiquée.
+# Les kana sont chargés automatiquement au démarrage de l'API (aucune commande de seed).
 TEST_DATABASE_URL=postgres://kanadrill:devpass@127.0.0.1:5432/kanadrill_test npx nx test api
 ```
 

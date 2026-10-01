@@ -24,6 +24,7 @@
 | Authentification | **OAuth Discord uniquement**, via **Passport** (`passport-oauth2`), scope `identify` | Écartés : pseudo + mot de passe (pas de SMTP pour réinitialiser), liens d'invitation, Google. Discord = pas d'e-mail stocké, filtre naturel contre les bots, et un futur **bot Discord** pourra retrouver le compte via l'ID Discord. |
 | Inscription | **Libre** (premier login Discord = création du compte) | Choix du propriétaire. Limitation de débit côté API pour compenser. |
 | Session | **JWT signé dans un cookie httpOnly** (30 jours), sans stockage serveur | Suffisant « dans un premier temps ». **À faire** : table de tokens pour pouvoir révoquer (voir §5). |
+| Données de base | **Seed idempotent au démarrage de l'API** (upsert), pas une migration | Une migration ne se rejoue pas : corriger une lecture ou ajouter un jeu de caractères aurait imposé une nouvelle migration. Aucune commande manuelle. |
 | Répétition espacée | **FSRS** (lib `ts-fsrs`) | Plus efficace que SM-2 (moins de révisions pour une même rétention), calibrable par utilisateur grâce aux `ReviewLog`. |
 | Kanjis | Import **local** de KANJIDIC2 (lectures, sens, niveau JLPT, traits) + **KanjiVG** (ordre des traits) | Pas de dépendance à une API externe susceptible de tomber. Licences CC BY-SA : prévoir une mention dans l'app. |
 | Exercices | QCM + saisie du romaji dès la v1 ; **dessin du caractère sur mobile en v2** | Reconnaissance automatique du tracé = gros chantier ; v2 = canvas + modèle KanjiVG + auto-évaluation. |
@@ -44,11 +45,13 @@ libs/shared         Types et constantes partagés (UserDto, règles du pseudo, f
 - `User` (pseudo modifiable, avatar) ←1—n→ `AuthIdentity` (`provider`, `providerId` unique ensemble). Une identité = un compte chez un fournisseur ; plusieurs fournisseurs pourront être ajoutés plus tard sans toucher à `User`.
 - Les migrations sont **appliquées au démarrage de l'API** (`migrationsRun: true`) ; `synchronize` est désactivé.
 
-### Modèle de données prévu (pas encore implémenté)
+### Modèle d'apprentissage (implémenté, `apps/api/src/app/learning`)
 
-- `Item` : un élément à apprendre (`type` : hiragana | katakana | kanji | …, caractère, lectures, sens, métadonnées).
-- `UserItem` : l'état FSRS d'un item pour un utilisateur (échéance, stabilité, difficulté, état, nombre de ratés) — unique par (utilisateur, item).
-- `ReviewLog` : chaque réponse (item, note Again/Hard/Good/Easy, durée, date), pour les stats et l'optimisation FSRS.
+- `Item` : un élément à apprendre (`type` : hiragana | katakana | kanji, caractère, `readings` = romaji acceptés dont le premier est la référence, `meanings`, `metadata` jsonb). Unique par (type, caractère).
+- `UserItem` : l'état FSRS d'un item pour un utilisateur, colonne par colonne comme le `Card` de ts-fsrs (`toCard()` / `applyCard()` dans `fsrs-card.ts`). Unique par (utilisateur, item), index (utilisateur, échéance).
+- `ReviewLog` : chaque réponse (note 1-4, durée en ms, date) + snapshot FSRS de la carte **avant** la réponse (requis par l'optimiseur de paramètres).
+- Les valeurs de `Rating` / `State` sont recopiées dans `libs/shared` (`REVIEW_RATING`, `CARD_STATE`) ; un test vérifie qu'elles restent égales à celles de ts-fsrs.
+- **Seed** : `SeedService` (`OnApplicationBootstrap`) fait un upsert idempotent des kana à chaque démarrage, après les migrations. Données dans `learning/seed/kana.data.ts` (hiragana + lectures ; le katakana en est dérivé par décalage Unicode). 104 kana par écriture : base 46 (ん et を inclus) + dakuten/handakuten 25 + yōon 33. Hors périmètre : kana rares (ゐ ゑ ヴ) et extensions katakana (ファ…). Corriger une lecture = modifier le fichier de données, pas de migration.
 
 ## 4. État actuel
 
@@ -57,6 +60,7 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 - Connexion Discord via Passport (state anti-CSRF en cookie, retour sur `/login?error=…` en cas d'échec ou de refus), session cookie, `GET/PATCH/DELETE /api/users/me`, suppression du compte en cascade, `GET /api/health`.
 - Front : connexion, accueil vide, profil (pseudo, connexions liées, déconnexion, suppression du compte).
 - Test d'intégration de l'authentification (`auth.integration.spec.ts`, voir README).
+- Étape 3 : entités `Item` / `UserItem` / `ReviewLog`, migration `LearningSchema`, seed automatique des kana, test d'intégration `learning.integration.spec.ts` (bundle de production démarré sur base vierge : OK).
 
 **Non vérifié** : le flux OAuth avec une vraie application Discord, le `docker compose build` réel (aucun Docker disponible lors de la création ; les étapes ont été rejouées à la main), l'affichage des avatars Discord.
 
@@ -64,7 +68,7 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 
 1. ~~Monorepo, Docker, auth Discord, profil~~ (fait).
 2. **Table de tokens de session** (demandée par le propriétaire « par sécurité ») : stocker chaque session (id/`jti`, utilisateur, empreinte, expiration, révocation, dernière utilisation), faire valider le JWT contre cette table dans `JwtAuthGuard`, permettre la déconnexion réelle et la révocation. Prévoir aussi le nettoyage des sessions expirées.
-3. Schéma `Item` / `UserItem` / `ReviewLog` + données de base hiragana et katakana.
+3. ~~Schéma `Item` / `UserItem` / `ReviewLog` + données de base hiragana et katakana~~ (fait).
 4. Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session quotidienne.
 5. Statistiques, installation PWA (manifest, service worker).
 6. Kanjis : import KANJIDIC2, ajout par caractère, listes personnelles par utilisateur, ordre des traits (KanjiVG).

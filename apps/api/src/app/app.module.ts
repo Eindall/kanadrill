@@ -11,6 +11,7 @@ import { validateEnv } from './config/env';
 import { ENTITIES } from './database/entities';
 import { MIGRATIONS } from './database/migrations';
 import { HealthController } from './health.controller';
+import { LearningModule } from './learning/learning.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module';
     }),
     AuthModule,
     UsersModule,
+    LearningModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
