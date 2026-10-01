@@ -24,6 +24,10 @@ export class Item {
   @Column({ type: 'text', array: true, default: () => "'{}'" })
   meanings!: string[];
 
+  /** Ordre pédagogique d'introduction des nouvelles cartes (croissant), fixé par le seed. */
+  @Column({ name: 'sort_order', type: 'integer', default: 0 })
+  sortOrder!: number;
+
   /** Données propres au type (ex. traits d'un kanji). */
   @Column({ type: 'jsonb', nullable: true })
   metadata!: Record<string, unknown> | null;

@@ -13,8 +13,11 @@ export interface UserDto {
   avatarUrl: string | null;
   createdAt: string;
   identities: AuthIdentityDto[];
+  /** Nouvelles cartes introduites au maximum par jour. */
+  dailyNewLimit: number;
 }
 
 export interface UpdateProfileRequest {
-  username: string;
+  username?: string;
+  dailyNewLimit?: number;
 }

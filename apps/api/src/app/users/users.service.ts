@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { AuthProvider, UserDto } from '@kanadrill/shared';
+import type { AuthProvider, UpdateProfileRequest, UserDto } from '@kanadrill/shared';
 import { AuthIdentity } from './auth-identity.entity';
 import { User } from './user.entity';
 
@@ -63,9 +63,10 @@ export class UsersService {
     return user;
   }
 
-  async updateUsername(id: string, username: string): Promise<User> {
+  async updateProfile(id: string, patch: UpdateProfileRequest): Promise<User> {
     const user = await this.findOneOrFail(id);
-    user.username = username;
+    if (patch.username !== undefined) user.username = patch.username;
+    if (patch.dailyNewLimit !== undefined) user.dailyNewLimit = patch.dailyNewLimit;
     await this.users.save(user);
     return user;
   }
@@ -80,6 +81,7 @@ export class UsersService {
       id: user.id,
       username: user.username,
       avatarUrl: user.avatarUrl,
+      dailyNewLimit: user.dailyNewLimit,
       createdAt: user.createdAt.toISOString(),
       identities: (user.identities ?? []).map((identity) => ({
         provider: identity.provider,

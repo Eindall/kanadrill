@@ -33,6 +33,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET manquant dans .env}
       APP_URL: ${APP_URL:?APP_URL manquant dans .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?DISCORD_CLIENT_ID manquant dans .env}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET manquant dans .env}
       DISCORD_REDIRECT_URI: ${APP_URL}/api/auth/discord/callback

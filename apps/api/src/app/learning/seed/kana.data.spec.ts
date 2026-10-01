@@ -19,6 +19,15 @@ describe('données des kana', () => {
     }
   });
 
+  it('définit un ordre d\'introduction strict : hiragana d\'abord, dans l\'ordre de la table', () => {
+    const seeds = buildKanaSeeds();
+    expect(new Set(seeds.map((s) => s.sortOrder)).size).toBe(seeds.length);
+    const byOrder = [...seeds].sort((x, y) => x.sortOrder - y.sortOrder);
+    expect(byOrder.slice(0, 3).map((s) => s.character)).toEqual(['あ', 'い', 'う']);
+    expect(byOrder.findIndex((s) => s.type === 'katakana')).toBe(104);
+    expect(byOrder.slice(104).every((s) => s.type === 'katakana')).toBe(true);
+  });
+
   it('dérive correctement le katakana', () => {
     expect(toKatakana('あ')).toBe('ア');
     expect(toKatakana('きゃ')).toBe('キャ');

@@ -53,6 +53,16 @@ libs/shared         Types et constantes partagés (UserDto, règles du pseudo, f
 - Les valeurs de `Rating` / `State` sont recopiées dans `libs/shared` (`REVIEW_RATING`, `CARD_STATE`) ; un test vérifie qu'elles restent égales à celles de ts-fsrs.
 - **Seed** : `SeedService` (`OnApplicationBootstrap`) fait un upsert idempotent des kana à chaque démarrage, après les migrations. Données dans `learning/seed/kana.data.ts` (hiragana + lectures ; le katakana en est dérivé par décalage Unicode). 104 kana par écriture : base 46 (ん et を inclus) + dakuten/handakuten 25 + yōon 33. Hors périmètre : kana rares (ゐ ゑ ヴ) et extensions katakana (ファ…). Corriger une lecture = modifier le fichier de données, pas de migration.
 
+### Session de révision (implémentée, `learning/reviews.*`)
+
+- `GET /api/reviews/session` : cartes **dues** (`state != New`, `due <= now`, les plus anciennes d'abord, 100 max), puis **nouvelles cartes** (items sans `UserItem`, par `items.sort_order`) dans la limite `users.daily_new_limit` (défaut 10, 0–100, modifiable via `PATCH /users/me { dailyNewLimit }`) moins les nouvelles cartes déjà vues aujourd'hui (`review_logs.state = New` depuis minuit). Le « jour » suit `APP_TIMEZONE` (défaut `Europe/Paris`). Le GET n'écrit rien : le `UserItem` est créé à la première réponse.
+- Mode : QCM (4 propositions, leurres = autres items du même type, jamais une réponse aussi valable comme « o » pour お/を) pour les cartes New/Learning/Relearning ; saisie du romaji pour les cartes en Review.
+- `POST /api/reviews { itemId, mode, answer, durationMs }` : le **serveur corrige** (`isRomajiCorrect`), déduit la note (`grading.ts`), puis, en une transaction, verrouille/crée le `UserItem`, écrit le `ReviewLog` (snapshot avant réponse) et applique FSRS (`enable_fuzz`). Notes : faux → Again ; juste → Good ; juste et > 8 s → Hard ; juste, **saisie** et < 2,5 s → Easy (jamais Easy au QCM). `durationMs` est plafonné à 120 s.
+- Correction du romaji dans `libs/shared/src/lib/romaji.ts` (partagée API/front) : normalisation (casse, espaces, tirets, apostrophes) + variantes Hepburn / Nihon-shiki (shi/si, chi/ti, tsu/tu, fu/hu, ji/zi, sha/sya, cha/tya, ja/jya/zya, n/nn…). Les `readings` du seed contiennent déjà certaines variantes ; les règles complètent.
+- Front (`features/review`) : une carte à la fois, grand caractère, retour immédiat calculé localement (le serveur fait foi ensuite), une carte **ratée est remise en fin de file** (`review-queue.ts`), bilan final (cartes, réussite sur première réponse, temps moyen, cartes à retravailler, prochaine échéance). Accueil : bouton « Commencer la session ».
+- **Limites connues** : `POST /reviews` n'est pas idempotent (un renvoi réseau compterait deux révisions) ; une bonne réponse à une carte en apprentissage n'est pas reposée dans la session (seules les ratées le sont) ; pas encore de réglage de la limite quotidienne dans l'interface (API seulement) ; les katakana arrivent après tous les hiragana (`sort_order`).
+- Le front n'a pas été vérifié à l'écran avec une vraie connexion Discord (build et tests unitaires OK ; l'API est couverte par `reviews.integration.spec.ts`).
+
 ## 4. État actuel
 
 Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
@@ -62,6 +72,8 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 - Test d'intégration de l'authentification (`auth.integration.spec.ts`, voir README).
 - Étape 3 : entités `Item` / `UserItem` / `ReviewLog`, migration `LearningSchema`, seed automatique des kana, test d'intégration `learning.integration.spec.ts` (bundle de production démarré sur base vierge : OK).
 
+- Étape 4 : session de révision quotidienne (API + écran mobile, voir § 3) ; tests de la correction du romaji, de la notation, des QCM, de la file côté front, et test d'intégration `reviews.integration.spec.ts`.
+
 **Non vérifié** : le flux OAuth avec une vraie application Discord, le `docker compose build` réel (aucun Docker disponible lors de la création ; les étapes ont été rejouées à la main), l'affichage des avatars Discord.
 
 ## 5. Feuille de route
@@ -69,7 +81,7 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 1. ~~Monorepo, Docker, auth Discord, profil~~ (fait).
 2. **Table de tokens de session** (demandée par le propriétaire « par sécurité ») : stocker chaque session (id/`jti`, utilisateur, empreinte, expiration, révocation, dernière utilisation), faire valider le JWT contre cette table dans `JwtAuthGuard`, permettre la déconnexion réelle et la révocation. Prévoir aussi le nettoyage des sessions expirées.
 3. ~~Schéma `Item` / `UserItem` / `ReviewLog` + données de base hiragana et katakana~~ (fait).
-4. Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session quotidienne.
+4. ~~Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session quotidienne~~ (fait). Reste à envisager : réglage de la limite quotidienne dans le profil, idempotence du POST.
 5. Statistiques, installation PWA (manifest, service worker).
 6. Kanjis : import KANJIDIC2, ajout par caractère, listes personnelles par utilisateur, ordre des traits (KanjiVG).
 7. Dessin du caractère sur mobile (canvas + auto-évaluation), puis éventuelle vérification automatique.
@@ -91,6 +103,7 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 - **Driver `pg`** : TypeORM le charge dynamiquement, Nx ne le détecte pas. L'`import 'pg'` dans `app.module.ts` est volontaire (sinon le conteneur de prod plante au démarrage).
 - **Image API** : on n'utilise pas le `package-lock.json` généré par Nx (désynchronisé de son `package.json`, `npm ci` échoue) ; le Dockerfile fait un `npm install` sur le `package.json` épinglé.
 - **Passport sans session** : `passport-oauth2` ne gère le `state` qu'avec une session serveur. Le `state` est donc géré par `DiscordAuthGuard` (cookie). Sans `code` dans le callback (utilisateur qui refuse chez Discord), la lib relancerait le flux en boucle : le guard l'intercepte.
+- **CLI TypeORM** : `migration:generate` ne résout pas `@kanadrill/shared` à l'exécution. Les entités n'importent que des **types** depuis `libs/shared` (pas de constante) ; sinon « Cannot find module '@kanadrill/shared' ».
 - **UUID** : générés par `pgcrypto` (`gen_random_uuid`, natif depuis Postgres 13), aucune extension à installer.
 - **Formulaires Angular** : un `<form>` avec seulement `ReactiveFormsModule` se soumet nativement (rechargement de page) ; utiliser `(submit)` + `preventDefault()` ou importer `FormsModule`.
 - **IP réelle** : nginx (conteneur web) ne fait confiance à `X-Forwarded-For` que depuis les réseaux privés ; l'API a `trust proxy = 1`. Si un CDN (ex. Cloudflare en mode proxy) est placé devant, adapter la config pour que la limitation de débit voie la vraie IP.

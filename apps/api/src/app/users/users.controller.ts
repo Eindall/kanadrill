@@ -19,7 +19,7 @@ export class UsersController {
 
   @Patch()
   async update(@CurrentUserId() userId: string, @Body() body: UpdateProfileDto): Promise<UserDto> {
-    return this.users.toDto(await this.users.updateUsername(userId, body.username));
+    return this.users.toDto(await this.users.updateProfile(userId, body));
   }
 
   @Delete()

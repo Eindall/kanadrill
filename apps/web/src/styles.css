@@ -12,6 +12,8 @@
   --color-line: #d3d9e3;
   --color-seal: #b3362b;
   --color-seal-dark: #8f2a21;
+  /* Vert discret pour confirmer une bonne réponse (le rouge reste réservé aux erreurs). */
+  --color-ok: #2c6e49;
 
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* Mincho (empattement) pour les caractères japonais : polices système, rien à télécharger. */

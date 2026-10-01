@@ -8,13 +8,29 @@ interface ItemSeed {
   character: string;
   readings: string[];
   meanings: string[];
+  sortOrder: number;
 }
 
+/** Les katakana viennent après tous les hiragana (jeu de 104 kana + marge). */
+const KATAKANA_OFFSET = 1000;
+
 export function buildKanaSeeds(): ItemSeed[] {
-  return HIRAGANA_ENTRIES.flatMap(([hiragana, readings]) => [
-    { type: 'hiragana' as const, character: hiragana, readings: [...readings], meanings: [] },
-    { type: 'katakana' as const, character: toKatakana(hiragana), readings: [...readings], meanings: [] },
-  ]);
+  // Ordre d'introduction : tout le hiragana, puis tout le katakana, chacun dans l'ordre de la table.
+  const hiragana = HIRAGANA_ENTRIES.map(([character, readings], index): ItemSeed => ({
+    type: 'hiragana',
+    character,
+    readings: [...readings],
+    meanings: [],
+    sortOrder: index,
+  }));
+  const katakana = HIRAGANA_ENTRIES.map(([character, readings], index): ItemSeed => ({
+    type: 'katakana',
+    character: toKatakana(character),
+    readings: [...readings],
+    meanings: [],
+    sortOrder: KATAKANA_OFFSET + index,
+  }));
+  return [...hiragana, ...katakana];
 }
 
 /**
@@ -28,7 +44,7 @@ export async function seedItems(dataSource: DataSource): Promise<number> {
     .insert()
     .into(Item)
     .values(seeds)
-    .orUpdate(['readings', 'meanings'], ['type', 'character'])
+    .orUpdate(['readings', 'meanings', 'sort_order'], ['type', 'character'])
     .execute();
   return seeds.length;
 }
