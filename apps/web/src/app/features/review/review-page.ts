@@ -2,8 +2,9 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { DRAWING_ANSWERS, isAnswerCorrect, type SessionConfig } from '@kanadrill/shared';
+import { DRAWING_ANSWERS, isAnswerCorrect, scoreDrawing, type DrawingScore, type SessionConfig } from '@kanadrill/shared';
 import { ReviewService } from '../../core/review.service';
+import { describeScore, suggestedAnswer, VERDICT_TITLES, type DrawingAnswer } from './drawing-feedback';
 import { DrawingPad } from './drawing-pad';
 import type { Point } from './drawing-path';
 import { StrokeOrder } from '../learn/stroke-order';
@@ -203,36 +204,40 @@ interface Feedback {
               <div class="grid grid-cols-2 gap-3">
                 <div class="flex flex-col items-center gap-2">
                   <h2 class="text-sm font-medium">Ton tracé</h2>
-                  <app-drawing-pad [strokes]="drawn()" [locked]="true" />
+                  <app-drawing-pad [strokes]="drawn()" [locked]="true" [flagged]="score()?.flagged ?? []" />
                 </div>
                 <div class="flex flex-col items-center gap-2">
                   <h2 class="text-sm font-medium">Modèle</h2>
                   <app-stroke-order [strokes]="current.strokes ?? []" />
                 </div>
               </div>
-              <p class="text-center text-sm text-ink-soft">
-                @if (drawn().length === (current.strokes?.length ?? 0)) {
-                  Même nombre de traits : {{ drawn().length }}. Compare aussi leur ordre et leur sens.
-                } @else {
-                  Tu as tracé {{ drawn().length }} {{ drawn().length > 1 ? 'traits' : 'trait' }}, le modèle en compte
-                  {{ current.strokes?.length ?? 0 }}.
-                }
-              </p>
-              <div class="grid grid-cols-2 gap-3" role="group" aria-label="Ton tracé était-il bon ?">
-                <button
-                  type="button"
-                  (click)="answer(drawingAnswers.wrong)"
-                  class="border-2 border-seal px-4 py-4 text-lg font-medium text-seal hover:bg-seal hover:text-paper"
+              @if (score(); as result) {
+                <div
+                  class="flex flex-col gap-1 border-l-4 bg-paper p-4"
+                  [class.border-ok]="result.verdict === 'good'"
+                  [class.border-ink]="result.verdict === 'fair'"
+                  [class.border-seal]="result.verdict === 'wrong'"
                 >
-                  Raté
-                </button>
-                <button
-                  type="button"
-                  (click)="answer(drawingAnswers.correct)"
-                  class="bg-ok px-4 py-4 text-lg font-medium text-paper hover:bg-ok/90"
-                >
-                  Réussi
-                </button>
+                  <p class="font-semibold">{{ verdictTitles[result.verdict] }}</p>
+                  @for (message of describe(result); track message) {
+                    <p class="text-sm text-ink-soft">{{ message }}</p>
+                  }
+                </div>
+              }
+              <div class="flex flex-col gap-2">
+                <p class="text-sm text-ink-soft">Ton verdict (celui proposé est mis en avant) :</p>
+                <div class="grid grid-cols-3 gap-3" role="group" aria-label="Ton tracé était-il bon ?">
+                  @for (option of drawingOptions; track option.answer) {
+                    <button
+                      type="button"
+                      (click)="answer(option.answer)"
+                      [class]="drawingButtonClass(option.answer)"
+                      [attr.aria-label]="option.label + (option.answer === suggestion() ? ' (proposé)' : '')"
+                    >
+                      {{ option.label }}
+                    </button>
+                  }
+                </div>
               </div>
             }
 
@@ -301,7 +306,19 @@ export class ReviewPage {
   protected readonly typed = signal('');
   /** Traits dessinés à la carte « tracé » en cours. */
   protected readonly drawn = signal<Point[][]>([]);
-  protected readonly drawingAnswers = DRAWING_ANSWERS;
+  /** Résultat de la comparaison tracé / modèle (au tracé, une fois le modèle affiché). */
+  protected readonly score = signal<DrawingScore | null>(null);
+  protected readonly suggestion = computed(() => {
+    const result = this.score();
+    return result ? suggestedAnswer(result) : null;
+  });
+  protected readonly verdictTitles = VERDICT_TITLES;
+  protected readonly describe = describeScore;
+  protected readonly drawingOptions: Array<{ answer: DrawingAnswer; label: string }> = [
+    { answer: DRAWING_ANSWERS.wrong, label: 'Raté' },
+    { answer: DRAWING_ANSWERS.fair, label: 'Presque' },
+    { answer: DRAWING_ANSWERS.correct, label: 'Réussi' },
+  ];
 
   protected readonly entry = computed(() => this.queue()[0] ?? null);
   protected readonly card = computed(() => this.entry()?.card ?? null);
@@ -334,6 +351,7 @@ export class ReviewPage {
     this.feedback.set(null);
     this.typed.set('');
     this.drawn.set([]);
+    this.score.set(null);
     try {
       const session = await this.reviews.loadSession(this.config);
       this.queue.set(toQueue(session.cards));
@@ -352,6 +370,20 @@ export class ReviewPage {
 
   protected typeLabel(type: keyof typeof TYPE_LABELS): string {
     return TYPE_LABELS[type];
+  }
+
+  /** Le verdict proposé est plein, les autres en contour ; chaque couleur garde son sens (rouge = raté, vert = juste). */
+  protected drawingButtonClass(answer: DrawingAnswer): string {
+    const base = 'px-2 py-4 text-lg font-medium border-2 ';
+    const suggested = answer === this.suggestion();
+    switch (answer) {
+      case DRAWING_ANSWERS.wrong:
+        return base + (suggested ? 'border-seal bg-seal text-paper' : 'border-seal text-seal hover:bg-seal hover:text-paper');
+      case DRAWING_ANSWERS.fair:
+        return base + (suggested ? 'border-ink bg-ink text-paper' : 'border-ink hover:bg-ink hover:text-paper');
+      default:
+        return base + (suggested ? 'border-ok bg-ok text-paper' : 'border-ok text-ok hover:bg-ok hover:text-paper');
+    }
   }
 
   protected choiceClass(choice: string): string {
@@ -381,6 +413,7 @@ export class ReviewPage {
   protected reveal(): void {
     if (this.phase() !== 'question' || this.drawn().length === 0) return;
     this.revealedAt = performance.now();
+    this.score.set(scoreDrawing(this.drawn(), this.card()?.strokes ?? []));
     this.phase.set('compare');
   }
 
@@ -431,6 +464,7 @@ export class ReviewPage {
     this.feedback.set(null);
     this.typed.set('');
     this.drawn.set([]);
+    this.score.set(null);
     if (this.queue().length === 0) {
       this.phase.set('done');
     } else {

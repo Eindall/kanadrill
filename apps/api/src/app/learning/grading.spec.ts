@@ -4,8 +4,8 @@ import { FAST_TYPING_MS, gradeAnswer, SLOW_ANSWER_MS, SLOW_DRAWING_MS } from './
 import { modesFor } from './compose-session';
 
 describe('gradeAnswer', () => {
-  const grade = (correct: boolean, mode: 'choice' | 'typing' | 'drawing', durationMs: number) =>
-    gradeAnswer({ correct, mode, durationMs });
+  const grade = (correct: boolean, mode: 'choice' | 'typing' | 'drawing', durationMs: number, answer?: string) =>
+    gradeAnswer({ correct, mode, durationMs, answer });
 
   it('note Again une mauvaise réponse, même rapide', () => {
     expect(grade(false, 'typing', 100)).toBe(REVIEW_RATING.Again);
@@ -24,6 +24,10 @@ describe('gradeAnswer', () => {
     expect(grade(true, 'drawing', 500)).toBe(REVIEW_RATING.Good);
     expect(grade(true, 'drawing', SLOW_ANSWER_MS + 1)).toBe(REVIEW_RATING.Good); // lent pour une saisie, normal pour un tracé
     expect(grade(true, 'drawing', SLOW_DRAWING_MS + 1)).toBe(REVIEW_RATING.Hard);
+  });
+  it('note Hard un tracé approximatif, même rapide', () => {
+    expect(grade(true, 'drawing', 500, 'fair')).toBe(REVIEW_RATING.Hard);
+    expect(grade(true, 'drawing', 500, 'correct')).toBe(REVIEW_RATING.Good);
   });
   it('ne note Easy qu\'une saisie rapide, jamais un QCM', () => {
     expect(grade(true, 'typing', FAST_TYPING_MS - 1)).toBe(REVIEW_RATING.Easy);

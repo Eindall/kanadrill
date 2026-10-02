@@ -156,7 +156,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(mixed.cards.every((card) => (card.mode === 'drawing') === (card.strokes !== undefined))).toBe(true);
   });
 
-  it('prend l\'auto-évaluation d\'un tracé comme réponse', async () => {
+  it('prend le verdict d\'un tracé (juste, approximatif, raté) comme réponse', async () => {
     // Un compte à part : les tests d'isolation attendent que bob n'ait encore rien répondu.
     const dave = await dataSource.getRepository(User).save({ username: 'dave', avatarUrl: null });
     const cookieD = await loginAs(dave.id);
@@ -164,7 +164,10 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(ok).toMatchObject({ correct: true, expected: 'ma', rating: 3 });
     const ko = (await (await answer(cookieD, await itemId('ね'), 'wrong', 'drawing', 9000)).json()) as ReviewResultDto;
     expect(ko).toMatchObject({ correct: false, expected: 'ne', rating: 1 });
-    // Ce que l'utilisateur « écrit » n'a pas de sens au tracé : seule l'auto-évaluation compte.
+    // « Approximatif » : compté juste, mais noté Hard.
+    const fair = (await (await answer(cookieD, await itemId('む'), 'fair', 'drawing', 9000)).json()) as ReviewResultDto;
+    expect(fair).toMatchObject({ correct: true, expected: 'mu', rating: 2 });
+    // Ce que l'utilisateur « écrit » n'a pas de sens au tracé : seul le verdict compte.
     const other = (await (await answer(cookieD, await itemId('ほ'), 'ho', 'drawing', 9000)).json()) as ReviewResultDto;
     expect(other.correct).toBe(false);
   });

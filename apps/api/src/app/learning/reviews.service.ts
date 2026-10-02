@@ -128,7 +128,7 @@ export class ReviewsService {
     if (!item) throw new NotFoundException('Élément introuvable');
 
     const correct = isAnswerCorrect(request.mode, request.answer, item.readings);
-    const rating = gradeAnswer({ correct, mode: request.mode, durationMs: request.durationMs });
+    const rating = gradeAnswer({ correct, mode: request.mode, durationMs: request.durationMs, answer: request.answer });
 
     const nextDue = await this.dataSource.transaction(async (manager) => {
       // Première réponse : la carte est créée avec les valeurs par défaut (= carte vierge).

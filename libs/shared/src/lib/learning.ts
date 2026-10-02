@@ -85,8 +85,11 @@ export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana'];
 export type ReviewMode = 'choice' | 'typing' | 'drawing';
 export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing'];
 
-/** Au tracé, la « réponse » envoyée est l'auto-évaluation : l'une de ces deux valeurs. */
-export const DRAWING_ANSWERS = { correct: 'correct', wrong: 'wrong' } as const;
+/**
+ * Au tracé, la « réponse » envoyée est le verdict : celui que l'app propose après comparaison avec le modèle,
+ * éventuellement corrigé par l'utilisateur. `fair` = juste mais approximatif (compté juste, noté Hard).
+ */
+export const DRAWING_ANSWERS = { correct: 'correct', fair: 'fair', wrong: 'wrong' } as const;
 
 /** Durée maximale prise en compte pour une réponse (au-delà, on plafonne : onglet laissé ouvert). */
 export const MAX_REVIEW_DURATION_MS = 120_000;

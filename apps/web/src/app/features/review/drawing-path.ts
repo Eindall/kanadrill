@@ -1,4 +1,6 @@
-export type Point = [x: number, y: number];
+import type { Point2D } from '@kanadrill/shared';
+
+export type Point = Point2D;
 
 const fmt = (value: number): string => String(Math.round(value * 10) / 10);
 const mid = (a: Point, b: Point): Point => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];

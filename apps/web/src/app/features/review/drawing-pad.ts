@@ -31,7 +31,7 @@ const MAX_POINTS_PER_STROKE = 1500;
       >
         <path d="M54.5 2V107M2 54.5H107" class="guide" />
         @for (d of paths(); track $index) {
-          <path [attr.d]="d" class="stroke" />
+          <path [attr.d]="d" class="stroke" [class.flagged]="flagged().includes($index)" />
         }
       </svg>
 
@@ -72,12 +72,17 @@ const MAX_POINTS_PER_STROKE = 1500;
       stroke: var(--color-ink);
       stroke-width: 3.5;
     }
+    .stroke.flagged {
+      stroke: var(--color-seal);
+    }
   `,
 })
 export class DrawingPad {
   /** Les traits dessinés, chacun une suite de points dans le repère 109 × 109 (liaison bidirectionnelle). */
   readonly strokes = model<Point[][]>([]);
   readonly locked = input(false);
+  /** Indices des traits à signaler (en rouge) : ceux que la comparaison a jugés fautifs. */
+  readonly flagged = input<readonly number[]>([]);
 
   protected readonly paths = computed(() => this.strokes().map(pointsToPath));
   private drawing = false;
