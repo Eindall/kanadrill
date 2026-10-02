@@ -19,6 +19,8 @@ import { User } from '../users/user.entity';
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
 
 (TEST_DATABASE_URL ? describe : describe.skip)('Schéma d\'apprentissage et seed', () => {
+  // Un seed complet (10 000 kanji et leurs tracés) prend de l'ordre de 2 s : plusieurs seeds dans un test dépassent les 5 s par défaut.
+  jest.setTimeout(60_000);
   let dataSource: DataSource;
   let close: () => Promise<void>;
 
