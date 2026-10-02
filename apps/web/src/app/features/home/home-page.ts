@@ -13,7 +13,10 @@ import { StreakTimeline } from '../stats/streak-timeline';
   imports: [RouterLink, FlameIcon, StreakTimeline],
   template: `
     <section class="flex flex-col gap-8">
-      <h1 class="text-2xl font-semibold tracking-tight">Bonjour {{ auth.user()?.username }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">
+        <!-- « Bienvenue » en japonais ; さん est la marque de politesse après le prénom -->
+        <span class="font-kana" lang="ja">ようこそ、</span>{{ auth.user()?.username }}<span class="font-kana" lang="ja">さん</span>
+      </h1>
 
       @if (streak(); as s) {
         <a routerLink="/stats" class="flex flex-col gap-4 border border-line bg-paper p-5 hover:border-ink" aria-label="Voir mes statistiques">
