@@ -224,21 +224,25 @@ interface Feedback {
                   }
                 </div>
               }
-              <div class="flex flex-col gap-2">
-                <p class="text-sm text-ink-soft">Ton verdict (celui proposé est mis en avant) :</p>
-                <div class="grid grid-cols-3 gap-3" role="group" aria-label="Ton tracé était-il bon ?">
-                  @for (option of drawingOptions; track option.answer) {
-                    <button
-                      type="button"
-                      (click)="answer(option.answer)"
-                      [class]="drawingButtonClass(option.answer)"
-                      [attr.aria-label]="option.label + (option.answer === suggestion() ? ' (proposé)' : '')"
-                    >
-                      {{ option.label }}
-                    </button>
-                  }
+              @if (suggestion(); as proposed) {
+                <button
+                  type="button"
+                  (click)="answer(proposed)"
+                  class="bg-ink px-6 py-4 text-lg font-medium text-paper hover:bg-ink/90"
+                >
+                  Suivant
+                </button>
+                <div class="flex flex-col gap-2">
+                  <p class="text-center text-sm text-ink-soft">Pas d'accord avec le verdict ? Compte-le plutôt comme :</p>
+                  <div class="grid grid-cols-2 gap-3">
+                    @for (option of otherOptions(); track option.answer) {
+                      <button type="button" (click)="answer(option.answer)" [class]="drawingButtonClass(option.answer)">
+                        {{ option.label }}
+                      </button>
+                    }
+                  </div>
                 </div>
-              </div>
+              }
             }
 
             <div aria-live="polite" class="min-h-28">
@@ -314,6 +318,7 @@ export class ReviewPage {
   });
   protected readonly verdictTitles = VERDICT_TITLES;
   protected readonly describe = describeScore;
+  protected readonly otherOptions = computed(() => this.drawingOptions.filter((option) => option.answer !== this.suggestion()));
   protected readonly drawingOptions: Array<{ answer: DrawingAnswer; label: string }> = [
     { answer: DRAWING_ANSWERS.wrong, label: 'Raté' },
     { answer: DRAWING_ANSWERS.fair, label: 'Presque' },
@@ -372,17 +377,16 @@ export class ReviewPage {
     return TYPE_LABELS[type];
   }
 
-  /** Le verdict proposé est plein, les autres en contour ; chaque couleur garde son sens (rouge = raté, vert = juste). */
+  /** Les verdicts alternatifs : en contour, chaque couleur garde son sens (rouge = raté, vert = juste). */
   protected drawingButtonClass(answer: DrawingAnswer): string {
-    const base = 'px-2 py-4 text-lg font-medium border-2 ';
-    const suggested = answer === this.suggestion();
+    const base = 'border-2 px-2 py-3 font-medium ';
     switch (answer) {
       case DRAWING_ANSWERS.wrong:
-        return base + (suggested ? 'border-seal bg-seal text-paper' : 'border-seal text-seal hover:bg-seal hover:text-paper');
+        return base + 'border-seal text-seal hover:bg-seal hover:text-paper';
       case DRAWING_ANSWERS.fair:
-        return base + (suggested ? 'border-ink bg-ink text-paper' : 'border-ink hover:bg-ink hover:text-paper');
+        return base + 'border-ink hover:bg-ink hover:text-paper';
       default:
-        return base + (suggested ? 'border-ok bg-ok text-paper' : 'border-ok text-ok hover:bg-ok hover:text-paper');
+        return base + 'border-ok text-ok hover:bg-ok hover:text-paper';
     }
   }
 
