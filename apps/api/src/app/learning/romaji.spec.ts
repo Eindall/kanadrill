@@ -1,5 +1,5 @@
 import { expandRomajiVariants, isRomajiCorrect, normalizeRomaji } from '@kanadrill/shared';
-import { HIRAGANA_ENTRIES } from './seed/kana.data';
+import { HIRAGANA_ENTRIES } from '@kanadrill/shared';
 
 describe('normalizeRomaji', () => {
   it('ignore la casse, les espaces, tirets et apostrophes', () => {

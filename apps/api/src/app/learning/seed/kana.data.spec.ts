@@ -1,6 +1,6 @@
 import { Rating, State } from 'ts-fsrs';
 import { CARD_STATE, REVIEW_RATING } from '@kanadrill/shared';
-import { HIRAGANA_ENTRIES, toKatakana } from './kana.data';
+import { HIRAGANA_ENTRIES, kanaToRomaji, toKatakana } from '@kanadrill/shared';
 import { buildKanaSeeds } from './seed-items';
 
 describe('données des kana', () => {
@@ -62,5 +62,26 @@ describe('constantes partagées vs ts-fsrs', () => {
       Review: State.Review,
       Relearning: State.Relearning,
     });
+  });
+});
+
+describe('kanaToRomaji', () => {
+  it('convertit le hiragana et le katakana, yōon compris', () => {
+    expect(kanaToRomaji('にほん')).toBe('nihon');
+    expect(kanaToRomaji('ニホン')).toBe('nihon');
+    expect(kanaToRomaji('しゃしん')).toBe('shashin');
+    expect(kanaToRomaji('きょう')).toBe('kyou');
+    expect(kanaToRomaji('ちゅうごく')).toBe('chuugoku');
+  });
+  it('double la consonne après un petit っ', () => {
+    expect(kanaToRomaji('がっこう')).toBe('gakkou');
+    expect(kanaToRomaji('ざっし')).toBe('zasshi');
+    expect(kanaToRomaji('まっちゃ')).toBe('matcha');
+    expect(kanaToRomaji('いっぱい')).toBe('ippai');
+  });
+  it('prolonge la voyelle avec ー et laisse le reste intact', () => {
+    expect(kanaToRomaji('ラーメン')).toBe('raamen');
+    expect(kanaToRomaji('ひ.く')).toBe('hi.ku');
+    expect(kanaToRomaji('abc')).toBe('abc');
   });
 });

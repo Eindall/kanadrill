@@ -18,6 +18,8 @@ WORKDIR /app
 COPY --from=build /app/dist/apps/api/package.json ./
 RUN npm install --omit=dev --no-package-lock --no-audit --no-fund && npm cache clean --force
 COPY --from=build /app/dist/apps/api/main.js ./main.js
+# Données des kanji (lues par le seed au démarrage), copiées à côté du bundle par webpack.
+COPY --from=build /app/dist/apps/api/assets ./assets
 
 USER node
 EXPOSE 3000

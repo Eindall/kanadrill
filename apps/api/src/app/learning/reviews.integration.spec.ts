@@ -99,7 +99,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(await status('count=20&types=hiragana&modes=choice')).toBe(400); // taille non proposée
     expect(await status('count=15&modes=choice')).toBe(400); // pas de type
     expect(await status('count=15&types=&modes=choice')).toBe(400);
-    expect(await status('count=15&types=kanji&modes=choice')).toBe(400); // pas encore disponible
+    expect(await status('count=15&types=kanji&modes=meaning')).toBe(400); // type valide, mais dictionnaire vide : aucune carte
     expect(await status('count=15&types=hiragana,hiragana&modes=choice')).toBe(400);
     expect(await status('count=15&types=hiragana')).toBe(400); // pas de mode
     expect(await status('count=15&types=hiragana&modes=dessin')).toBe(400);
@@ -174,7 +174,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
 
   it('indique les cartes disponibles par type et l\'objectif du jour', async () => {
     expect(await getOverview(cookieA)).toEqual({
-      available: { hiragana: { total: 104, due: 0 }, katakana: { total: 104, due: 0 } },
+      available: { hiragana: { total: 104, due: 0 }, katakana: { total: 104, due: 0 }, kanji: { total: 0, due: 0 } }, // kanji : dictionnaire vide
       answersToday: 0,
       dailyGoal: 30,
     });

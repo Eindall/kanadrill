@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { KANA_TYPES, type CatalogItemDto, type ItemDetailDto, type KanaGroup, type StrokeDto } from '@kanadrill/shared';
+import { KANA_TYPES, type CatalogItemDto, type ItemDetailDto, type JlptLevel, type KanaGroup, type StrokeDto } from '@kanadrill/shared';
 import { Item } from './item.entity';
 import { masteryLevel } from './mastery';
 import { UserItem } from './user-item.entity';
@@ -48,17 +48,41 @@ export class CatalogService {
     const item = await this.items.findOneBy({ id: itemId });
     if (!item) throw new NotFoundException('Élément introuvable');
     const userItem = await this.userItems.findOneBy({ userId, itemId });
-    const metadata = (item.metadata ?? {}) as { group?: KanaGroup; strokes?: StrokeDto[] };
+    const metadata = (item.metadata ?? {}) as {
+      group?: KanaGroup;
+      strokes?: StrokeDto[];
+      jlpt?: JlptLevel | null;
+      grade?: number | null;
+      frequency?: number | null;
+      strokeCount?: number | null;
+      language?: 'fr' | 'en';
+      on?: string[];
+      kun?: string[];
+    };
 
     return {
       id: item.id,
       type: item.type,
       character: item.character,
-      reading: item.readings[0],
+      reading: item.readings[0] ?? '',
       group: metadata.group ?? null,
       mastery: masteryLevel(userItem),
       readings: item.readings,
       meanings: item.meanings,
+      ...(item.type === 'kanji'
+        ? {
+            kanji: {
+              on: metadata.on ?? [],
+              kun: metadata.kun ?? [],
+              jlpt: metadata.jlpt ?? null,
+              grade: metadata.grade ?? null,
+              frequency: metadata.frequency ?? null,
+              strokeCount: metadata.strokeCount ?? null,
+              language: metadata.language ?? 'en',
+              inDictionary: userItem !== null,
+            },
+          }
+        : {}),
       strokes: metadata.strokes ?? [],
       reps: userItem?.reps ?? 0,
       lapses: userItem?.lapses ?? 0,

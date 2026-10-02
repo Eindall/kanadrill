@@ -1,4 +1,4 @@
-import { CARD_STATE, type ReviewMode } from '@kanadrill/shared';
+import { CARD_STATE, isKanjiType, modesOfType, type ItemType, type ReviewMode } from '@kanadrill/shared';
 import { shuffle } from './shuffle';
 
 /** Une carte candidate pour une session : un item et l'état de l'utilisateur dessus (vierge s'il ne l'a jamais vu). */
@@ -63,11 +63,28 @@ export function pickMode<M>(modes: readonly M[], random: () => number = Math.ran
   return modes[Math.floor(random() * modes.length)];
 }
 
+/** Ce dont une carte dispose pour chaque exercice. */
+export interface ModeSupport {
+  type: ItemType;
+  hasStrokes: boolean;
+  hasReadings: boolean;
+  hasMeanings: boolean;
+}
+
 /**
- * Les exercices possibles pour une carte parmi ceux cochés : le tracé exige un modèle (les traits). Une carte
- * sans modèle, dans une session « tracé » seul, retombe sur le QCM plutôt que d'être écartée.
+ * Les exercices possibles pour une carte parmi ceux cochés. Chaque famille a les siens (un kana : QCM, saisie,
+ * tracé ; un kanji : sens, lecture, tracé) et chaque exercice exige sa donnée : un modèle de tracé, des lectures,
+ * des sens. Si rien ne convient (ex. des kanji dans une session « QCM de kana » seul), la carte retombe sur
+ * l'exercice de base de sa famille plutôt que d'être écartée.
  */
-export function modesFor(modes: readonly ReviewMode[], hasStrokes: boolean): ReviewMode[] {
-  const possible = hasStrokes ? [...modes] : modes.filter((mode) => mode !== 'drawing');
-  return possible.length > 0 ? possible : ['choice'];
+export function modesFor(modes: readonly ReviewMode[], card: ModeSupport): ReviewMode[] {
+  const ofFamily = new Set(modesOfType(card.type));
+  const possible = modes.filter((mode) => {
+    if (!ofFamily.has(mode)) return false;
+    if (mode === 'drawing') return card.hasStrokes;
+    if (mode === 'reading') return card.hasReadings;
+    if (mode === 'meaning') return card.hasMeanings;
+    return true;
+  });
+  return possible.length > 0 ? possible : [isKanjiType(card.type) ? 'meaning' : 'choice'];
 }

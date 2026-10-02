@@ -13,13 +13,31 @@ export type ReviewRating = (typeof REVIEW_RATING)[keyof typeof REVIEW_RATING];
 export const CARD_STATE = { New: 0, Learning: 1, Review: 2, Relearning: 3 } as const;
 export type CardState = (typeof CARD_STATE)[keyof typeof CARD_STATE];
 
+/** Niveaux du JLPT (listes de Jonathan Waller) ; les kanji hors de ces listes forment la catégorie « autres ». */
+export const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'] as const;
+export type JlptLevel = (typeof JLPT_LEVELS)[number];
+export type KanjiLevel = JlptLevel | 'other';
+export const KANJI_LEVELS: readonly KanjiLevel[] = [...JLPT_LEVELS, 'other'];
+
+/** Lectures d'un kanji telles que KANJIDIC2 les note : on en katakana, kun en hiragana (« ひ.く », « -び »). */
+export interface KanjiReadings {
+  on: string[];
+  kun: string[];
+}
+
 export interface ItemDto {
   id: string;
   type: ItemType;
   character: string;
-  /** Romaji acceptés en saisie ; le premier est la lecture de référence (à afficher). */
+  /**
+   * Romaji acceptés en saisie. Kana : le premier est la lecture de référence (à afficher). Kanji : toutes les
+   * lectures on et kun, avec ou sans okurigana (vide si le kanji n'a pas de lecture).
+   */
   readings: string[];
+  /** Sens, en français quand KANJIDIC2 en a, sinon en anglais (vide pour les kana). */
   meanings: string[];
+  /** Kanji uniquement : lectures à afficher (kana). */
+  kanji?: KanjiReadings;
 }
 
 /** Les types qui sont des kana (ils sont d'office dans le dictionnaire de chacun). */
@@ -44,11 +62,26 @@ export interface CatalogItemDto {
   id: string;
   type: ItemType;
   character: string;
-  /** Lecture de référence (romaji). */
+  /** Lecture de référence (romaji ; vide pour un kanji sans lecture). */
   reading: string;
   /** Groupe de kana ; `null` pour un kanji. */
   group: KanaGroup | null;
   mastery: MasteryLevel;
+}
+
+/** Ce que la fiche d'un kanji ajoute à celle d'un kana. */
+export interface KanjiDetailDto extends KanjiReadings {
+  /** `null` : hors des listes JLPT. */
+  jlpt: JlptLevel | null;
+  /** Niveau scolaire japonais (1 à 6 : kyōiku ; 8 : autres jōyō ; 9 et 10 : jinmeiyō), s'il y en a un. */
+  grade: number | null;
+  /** Rang de fréquence (1 = le plus courant), s'il est connu. */
+  frequency: number | null;
+  strokeCount: number | null;
+  /** Langue des sens : français quand KANJIDIC2 en a, sinon anglais. */
+  language: 'fr' | 'en';
+  /** Dans le dictionnaire perso de l'utilisateur. */
+  inDictionary: boolean;
 }
 
 /** Fiche détail d'un élément. */
@@ -56,6 +89,8 @@ export interface ItemDetailDto extends CatalogItemDto {
   /** Tous les romaji acceptés. */
   readings: string[];
   meanings: string[];
+  /** Kanji uniquement. */
+  kanji?: KanjiDetailDto;
   /** Traits dans l'ordre d'écriture (vide si KanjiVG ne couvre pas l'élément). */
   strokes: StrokeDto[];
   /** Nombre de réponses données et de ratés. */
@@ -64,6 +99,38 @@ export interface ItemDetailDto extends CatalogItemDto {
   /** Prochaine échéance (ISO 8601), `null` si jamais révisé. */
   nextDue: string | null;
 }
+
+/** Un kanji dans la liste du mode « Apprendre ». */
+export interface KanjiListItemDto {
+  id: string;
+  character: string;
+  /** Premier sens (français si KANJIDIC2 en a, sinon anglais). */
+  meaning: string;
+  jlpt: JlptLevel | null;
+  /** Dans le dictionnaire perso de l'utilisateur (seuls ces kanji sont révisés). */
+  inDictionary: boolean;
+  /** `unseen` tant que le kanji n'est pas dans le dictionnaire ou n'a reçu aucune réponse. */
+  mastery: MasteryLevel;
+}
+
+export interface KanjiPageDto {
+  items: KanjiListItemDto[];
+  /** Nombre de kanji correspondant à la recherche (au-delà de la page). */
+  total: number;
+}
+
+export const KANJI_PAGE_SIZE = 100;
+export const KANJI_MAX_PAGE_SIZE = 200;
+
+/** Effectifs d'un niveau JLPT (ou de « autres »), pour l'utilisateur. */
+export interface KanjiLevelSummaryDto {
+  level: KanjiLevel;
+  total: number;
+  inDictionary: number;
+}
+
+/** Nombre maximal de kanji ajoutés d'un coup au dictionnaire. */
+export const MAX_DICTIONARY_BATCH = 500;
 
 /** Objectif quotidien (nombre de cartes à tenter par jour) : défaut et bornes, modifiable par utilisateur. */
 export const DEFAULT_DAILY_GOAL = 30;
@@ -75,15 +142,24 @@ export const SESSION_SIZES = [15, 30, 50] as const;
 export type SessionSize = (typeof SESSION_SIZES)[number];
 export const DEFAULT_SESSION_SIZE: SessionSize = 30;
 
-/** Types que l'on peut cocher pour une session (« kanji » s'ajoutera avec le dictionnaire perso). */
-export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana'];
+/** Types que l'on peut cocher pour une session (les kanji : ceux du dictionnaire perso). */
+export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana', 'kanji'];
 
 /**
  * QCM (retrouver la lecture parmi des propositions), saisie libre du romaji, ou tracé : on voit la lecture, on
  * dessine le kana à la main, puis on s'auto-évalue face au modèle (le tracé n'est proposé que sur écran tactile).
  */
-export type ReviewMode = 'choice' | 'typing' | 'drawing';
-export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing'];
+export type ReviewMode = 'choice' | 'typing' | 'drawing' | 'meaning' | 'reading';
+export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'meaning', 'reading'];
+
+/**
+ * Exercices propres à chaque famille : un kana se demande par sa lecture (QCM ou saisie), un kanji par son sens
+ * (QCM) ou sa lecture (saisie en romaji ou en kana) ; le tracé vaut pour les deux.
+ */
+export const KANA_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing'];
+export const KANJI_MODES: readonly ReviewMode[] = ['meaning', 'reading', 'drawing'];
+export const isKanjiType = (type: ItemType): boolean => type === 'kanji';
+export const modesOfType = (type: ItemType): readonly ReviewMode[] => (isKanjiType(type) ? KANJI_MODES : KANA_MODES);
 
 /**
  * Au tracé, la « réponse » envoyée est le verdict : celui que l'app propose après comparaison avec le modèle,

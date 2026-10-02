@@ -1,4 +1,4 @@
-import { HIRAGANA_ENTRIES, toKatakana } from './kana.data';
+import { HIRAGANA_ENTRIES, toKatakana } from '@kanadrill/shared';
 import { KANA_GLYPHS } from './kana-glyphs.data';
 import { kanaStrokes, transformPath } from './kana-strokes';
 

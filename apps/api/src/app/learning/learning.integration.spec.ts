@@ -22,6 +22,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
   let dataSource: DataSource;
   let close: () => Promise<void>;
 
+  const countKana = async () => (await countItems('hiragana')) + (await countItems('katakana'));
   const countItems = (type: string) => dataSource.getRepository(Item).countBy({ type: type as Item['type'] });
   const newUser = () => dataSource.getRepository(User).save({ username: 'tester', avatarUrl: null });
   const getItem = (character: string) => dataSource.getRepository(Item).findOneByOrFail({ character });
@@ -58,7 +59,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
   it('est idempotent : un second seed ne crée aucun doublon', async () => {
     await seedItems(dataSource);
     await seedItems(dataSource);
-    expect(await dataSource.getRepository(Item).count()).toBe(208);
+    expect(await countKana()).toBe(208);
   });
 
   it('corrige les lectures modifiées et conserve les identifiants', async () => {
@@ -135,11 +136,11 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     const user = await dataSource.getRepository(User).findOneByOrFail({ username: 'tester' });
     await seedItems(dataSource);
     expect(await dataSource.getRepository(UserItem).countBy({ userId: user.id })).toBe(1);
-    expect(await dataSource.getRepository(Item).count()).toBe(208);
+    expect(await countKana()).toBe(208);
 
     await dataSource.getRepository(User).delete(user.id);
     expect(await dataSource.getRepository(UserItem).countBy({ userId: user.id })).toBe(0);
     expect(await dataSource.getRepository(ReviewLog).countBy({ userId: user.id })).toBe(0);
-    expect(await dataSource.getRepository(Item).count()).toBe(208);
+    expect(await countKana()).toBe(208);
   });
 });

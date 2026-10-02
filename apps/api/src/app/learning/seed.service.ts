@@ -10,7 +10,8 @@ export class SeedService implements OnApplicationBootstrap {
   constructor(private readonly dataSource: DataSource) {}
 
   async onApplicationBootstrap(): Promise<void> {
-    const count = await seedItems(this.dataSource);
-    this.logger.log(`${count} kana synchronisés`);
+    const started = Date.now();
+    const { kana, kanji } = await seedItems(this.dataSource);
+    this.logger.log(`${kana} kana et ${kanji} kanji synchronisés en ${Date.now() - started} ms`);
   }
 }
