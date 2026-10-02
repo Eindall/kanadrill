@@ -102,7 +102,9 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 
 - Lot B vérifié dans Chrome (headless, serveur local) : le service worker s'enregistre, une navigation vers `/api/auth/discord` atteint bien le serveur (et échoue sans l'exclusion `/api`, contrôle négatif fait), les routes Angular sont servies par le service worker, `fetch('/api/…')` n'est jamais mis en cache, Chrome ne signale aucune erreur d'installabilité ; en-têtes nginx contrôlés sur l'image web construite (service worker sans cache, manifest en `application/manifest+json`, CSP conservée). Ce script de contrôle n'est pas dans le dépôt.
 
-**Non vérifié** : le flux OAuth avec une vraie application Discord, le `docker compose build` réel (aucun Docker disponible lors de la création ; les étapes ont été rejouées à la main), l'affichage des avatars Discord.
+**Déploiement vérifié en production (VPS)** : le flux OAuth avec une vraie application Discord, l'affichage des avatars Discord et le `docker compose` (build et exécution) fonctionnent. Déploiement automatisé par le workflow `deploy.yml`.
+
+**Non vérifié** : rien de connu pour l'instant.
 
 ## 5. Feuille de route
 
@@ -112,7 +114,7 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 4. ~~Exercices QCM et saisie du romaji, avec FSRS branché dès le début ; écran de session~~ (fait). Reste à envisager : idempotence du POST.
 5. ~~**Lot A** : sessions paramétrées (taille, écritures, exercices, cycle) + objectif quotidien (profil, jauge sur l'accueil), suppression de la limite quotidienne~~ (fait).
 6. ~~**Lot B** : PWA (manifest, icônes, service worker qui ne met en cache que la coque de l'application, jamais l'API ; nginx qui ne met pas en cache le service worker ; bannière de mise à jour)~~ (fait).
-7. ~~**Lot C** : sessions révocables (table `auth_sessions`, expiration glissante 48 h, déconnexion réelle, liste des appareils dans le profil) + sauvegarde de la base (`scripts/backup-db.sh`)~~ (fait). **Le déploiement sur le VPS peut avoir lieu** (voir le README, section Production et sauvegarde).
+7. ~~**Lot C** : sessions révocables (table `auth_sessions`, expiration glissante 48 h, déconnexion réelle, liste des appareils dans le profil) + sauvegarde de la base (`scripts/backup-db.sh`)~~ (fait). **Déployé sur le VPS et validé** (voir le README, section Production et sauvegarde).
 8. **Lot D** : mode « Apprendre » : catalogue (grilles par écriture et par groupe : `metadata.group` à ajouter au seed), fiches détail des kana avec **ordre des traits animé** (tracés KanjiVG des 208 kana, générés par script et commités), maîtrise par kana ; page « À propos » avec les licences (KanjiVG CC BY-SA, KANJIDIC2 EDRDG).
 9. **Lot E** : exercice de **tracé** sur mobile (canvas tactile + auto-évaluation, mode `drawing` dans le réglage de session), fonctionne déjà sur les kana grâce au lot D ; vérification automatique du tracé = hors périmètre pour l'instant.
 10. **Lot F** : kanji : import KANJIDIC2 (JSON généré par script), recherche et ajout par caractère, filtre JLPT, dictionnaire perso (`POST` / `DELETE`), type « kanji » dans les sessions, tracés KanjiVG des kanji, exercices kanji (question à trancher, voir § 3).
