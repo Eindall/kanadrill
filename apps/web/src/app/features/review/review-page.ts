@@ -166,6 +166,15 @@ interface Feedback {
                 } @else {
                   <p class="font-kana text-5xl leading-none" lang="ja">{{ current.item.character }}</p>
                 }
+              } @else if (current.mode === 'reverse') {
+                <!-- QCM inversé : on voit la lecture (kana) ou le sens (kanji), on retrouve le caractère. -->
+                @if (current.item.kanji) {
+                  <p class="text-center text-4xl font-semibold leading-tight sm:text-5xl">{{ meanings(current.item, 28) }}</p>
+                  <p class="text-sm text-ink-soft">Quel est ce kanji ?</p>
+                } @else {
+                  <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ current.item.readings[0] }}</p>
+                  <p class="text-sm text-ink-soft">Quel {{ current.item.type === 'katakana' ? 'katakana' : 'hiragana' }} se lit ainsi ?</p>
+                }
               } @else {
                 <p class="font-kana text-[7rem] leading-none sm:text-[9rem]" lang="ja">{{ current.item.character }}</p>
                 @if (current.item.kanji) {
@@ -176,12 +185,14 @@ interface Feedback {
               }
             </div>
 
-            @if (current.mode === 'choice' || current.mode === 'meaning') {
+            @if (current.mode === 'choice' || current.mode === 'meaning' || current.mode === 'reverse') {
               <div
                 class="grid gap-3"
                 [class]="current.mode === 'meaning' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2'"
                 role="group"
-                [attr.aria-label]="current.mode === 'meaning' ? 'Quel est le sens ?' : 'Quelle est la lecture ?'"
+                [attr.aria-label]="
+                  current.mode === 'meaning' ? 'Quel est le sens ?' : current.mode === 'reverse' ? 'Quel est le bon caractère ?' : 'Quelle est la lecture ?'
+                "
               >
                 @for (choice of current.choices; track choice; let i = $index) {
                   <button
@@ -190,7 +201,8 @@ interface Feedback {
                     (click)="answer(choice)"
                     [class]="choiceClass(choice)"
                   >
-                    <span class="mr-2 text-xs text-ink-soft max-sm:hidden" aria-hidden="true">{{ i + 1 }}</span>{{ choice }}
+                    <span class="mr-2 text-xs text-ink-soft max-sm:hidden" aria-hidden="true">{{ i + 1 }}</span
+                    ><span [attr.lang]="current.mode === 'reverse' ? 'ja' : null">{{ choice }}</span>
                   </button>
                 }
               </div>
@@ -298,6 +310,11 @@ interface Feedback {
                     </p>
                   } @else if (!current.item.kanji && current.item.readings.length > 1 && f.answer.trim().toLowerCase() !== f.expected) {
                     <p class="text-sm text-ink-soft">Lecture de référence : {{ f.expected }}</p>
+                  }
+                  @if (current.mode === 'reverse' && !current.item.kanji) {
+                    <p class="text-sm text-ink-soft">
+                      <span class="font-kana text-lg text-ink" lang="ja">{{ current.item.character }}</span> · {{ current.item.readings[0] }}
+                    </p>
                   }
                   @if (current.item.kanji; as kanji) {
                     <!-- Récapitulatif du kanji, pour apprendre même quand on a juste. -->
@@ -441,8 +458,10 @@ export class ReviewPage {
   }
 
   protected choiceClass(choice: string): string {
-    const size = this.card()?.mode === 'meaning' ? 'text-lg' : 'text-2xl';
-    const base = `min-h-16 border px-4 py-3 ${size} transition-colors disabled:cursor-default `;
+    const mode = this.card()?.mode;
+    // Les caractères du QCM inversé sont grands et en police japonaise ; les sens (longs) plus petits.
+    const size = mode === 'meaning' ? 'text-lg min-h-16' : mode === 'reverse' ? 'font-kana text-5xl min-h-24' : 'text-2xl min-h-16';
+    const base = `border px-4 py-3 ${size} transition-colors disabled:cursor-default `;
     const f = this.feedback();
     if (!f) return base + 'border-line bg-paper hover:border-ink';
     if (choice === f.expected) return base + 'border-ok bg-ok/10 font-semibold text-ok';
@@ -453,7 +472,7 @@ export class ReviewPage {
   protected onKeydown(event: KeyboardEvent): void {
     // Raccourcis 1–4 pour le QCM (clavier physique).
     const card = this.card();
-    if (this.phase() !== 'question' || (card?.mode !== 'choice' && card?.mode !== 'meaning') || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.phase() !== 'question' || (card?.mode !== 'choice' && card?.mode !== 'meaning' && card?.mode !== 'reverse') || event.ctrlKey || event.metaKey || event.altKey) return;
     const choice = card.choices?.[Number(event.key) - 1];
     if (choice !== undefined) void this.answer(choice);
   }

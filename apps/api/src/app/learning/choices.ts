@@ -51,3 +51,46 @@ export function buildMeaningChoices(
     .map((decoy) => decoy.meaning);
   return shuffle([correct, ...distractors], random);
 }
+
+/** Ce qu'il faut savoir d'un élément pour le proposer (ou l'écarter) dans un QCM inversé. */
+export interface ReverseSubject {
+  character: string;
+  readings: readonly string[];
+  meanings: readonly string[];
+}
+
+/**
+ * Propositions du QCM inversé : le caractère de l'élément + des leurres tirés de `pools` (le premier lot d'abord,
+ * puis les suivants si besoin : les leurres du même niveau avant les autres). On voit la lecture (`reading`, pour un
+ * kana) ou le sens (`meaning`, pour un kanji) : un leurre qui partagerait cette lecture ou ce sens serait aussi une
+ * bonne réponse (お et を se lisent « o », 日 et 曜 partagent parfois un sens) et est écarté.
+ */
+export function buildReverseChoices(
+  item: ReverseSubject,
+  by: 'reading' | 'meaning',
+  pools: ReadonlyArray<readonly ReverseSubject[]>,
+  random: () => number = Math.random,
+): string[] {
+  const keys = (subject: ReverseSubject): Set<string> =>
+    new Set(
+      by === 'reading'
+        ? subject.readings.flatMap((reading) => expandRomajiVariants(reading))
+        : subject.meanings.map(normalizeMeaning),
+    );
+  const clashing = keys(item);
+  const wanted = CHOICE_COUNT - 1;
+  const chosen: string[] = [];
+  const seen = new Set([item.character]);
+
+  for (const pool of pools) {
+    for (const other of shuffle(pool, random)) {
+      if (chosen.length >= wanted) break;
+      if (seen.has(other.character)) continue;
+      seen.add(other.character);
+      if ([...keys(other)].some((key) => clashing.has(key))) continue;
+      chosen.push(other.character);
+    }
+    if (chosen.length >= wanted) break;
+  }
+  return shuffle([item.character, ...chosen], random);
+}

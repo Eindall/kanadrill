@@ -1,11 +1,12 @@
 import { displayMeanings, displayReadings, expectedAnswer, isAnswerCorrect, isReadingCorrect, type AnswerableItem } from '@kanadrill/shared';
 
 const hi: AnswerableItem = {
+  character: '日',
   readings: ['nichi', 'jitsu', 'hi', 'bi', 'ka'],
   meanings: ['jour', 'soleil', 'Japon', 'compteur de jours'],
   kanji: { on: ['ニチ', 'ジツ'], kun: ['ひ', '-び', '-か'] },
 };
-const a: AnswerableItem = { readings: ['a'], meanings: [] };
+const a: AnswerableItem = { character: 'あ', readings: ['a'], meanings: [] };
 const sa: AnswerableItem = { readings: ['shi', 'si'], meanings: [] };
 
 describe('isAnswerCorrect', () => {
@@ -41,6 +42,14 @@ describe('isAnswerCorrect', () => {
     expect(isReadingCorrect('しょう', ['shou', 'sho'])).toBe(true);
   });
 
+  it('QCM inversé : la réponse est le caractère choisi', () => {
+    expect(isAnswerCorrect('reverse', '日', hi)).toBe(true);
+    expect(isAnswerCorrect('reverse', '月', hi)).toBe(false);
+    expect(isAnswerCorrect('reverse', 'あ', a)).toBe(true);
+    expect(isAnswerCorrect('reverse', 'ア', a)).toBe(false); // katakana ≠ hiragana
+    expect(isAnswerCorrect('reverse', '日', { readings: [], meanings: [] })).toBe(false); // caractère inconnu
+  });
+
   it('tracé : le verdict fait foi', () => {
     expect(isAnswerCorrect('drawing', 'correct', hi)).toBe(true);
     expect(isAnswerCorrect('drawing', 'fair', hi)).toBe(true);
@@ -57,6 +66,8 @@ describe('expectedAnswer', () => {
     expect(expectedAnswer('reading', hi)).toBe('ニチ, ジツ, ひ, -び, -か');
     expect(expectedAnswer('drawing', hi)).toBe('jour, soleil, Japon'); // un kanji se dessine d'après son sens
     expect(expectedAnswer('drawing', sa)).toBe('shi'); // un kana, d'après sa lecture
+    expect(expectedAnswer('reverse', hi)).toBe('日'); // à l'envers, la bonne réponse est le caractère
+    expect(expectedAnswer('reverse', a)).toBe('あ');
   });
   it('limite les sens affichés, en nombre et en longueur, et tolère un kanji sans lecture', () => {
     expect(displayMeanings({ meanings: ['a', 'b', 'c', 'd'] }, 2)).toBe('a, b');

@@ -1,5 +1,5 @@
 import { REVIEW_RATING, type ReviewMode } from '@kanadrill/shared';
-import { buildChoices, buildMeaningChoices } from './choices';
+import { buildChoices, buildMeaningChoices, buildReverseChoices } from './choices';
 import { FAST_READING_MS, FAST_TYPING_MS, gradeAnswer, SLOW_ANSWER_MS, SLOW_DRAWING_MS, SLOW_MEANING_MS, SLOW_READING_MS } from './grading';
 import { modesFor } from './compose-session';
 
@@ -37,6 +37,13 @@ describe('gradeAnswer', () => {
     expect(grade(true, 'reading', FAST_READING_MS - 1)).toBe(REVIEW_RATING.Easy);
     expect(grade(true, 'reading', FAST_READING_MS)).toBe(REVIEW_RATING.Good);
     expect(grade(true, 'reading', SLOW_READING_MS + 1)).toBe(REVIEW_RATING.Hard);
+  });
+  it('note le QCM inversé comme un QCM (jamais Easy), plus large pour un kanji', () => {
+    expect(gradeAnswer({ correct: false, mode: 'reverse', durationMs: 500 })).toBe(REVIEW_RATING.Again);
+    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: 500 })).toBe(REVIEW_RATING.Good);
+    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: SLOW_ANSWER_MS + 1 })).toBe(REVIEW_RATING.Hard); // kana
+    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: SLOW_ANSWER_MS + 1, kanji: true })).toBe(REVIEW_RATING.Good);
+    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: SLOW_MEANING_MS + 1, kanji: true })).toBe(REVIEW_RATING.Hard);
   });
   it('ne note Easy qu\'une saisie rapide, jamais un QCM', () => {
     expect(grade(true, 'typing', FAST_TYPING_MS - 1)).toBe(REVIEW_RATING.Easy);
@@ -82,6 +89,12 @@ describe('modesFor', () => {
     expect(modesFor(['typing', 'drawing'], { ...kana, hasStrokes: false })).toEqual(['typing']);
     expect(modesFor(['meaning', 'reading', 'drawing'], { ...kanji, hasStrokes: false, hasReadings: false })).toEqual(['meaning']);
   });
+  it('propose le QCM inversé aux deux familles (un kanji se retrouve par son sens)', () => {
+    expect(modesFor(['reverse'], kana)).toEqual(['reverse']);
+    expect(modesFor(['reverse'], kanji)).toEqual(['reverse']);
+    expect(modesFor(['reverse', 'choice'], kana)).toEqual(['reverse', 'choice']);
+    expect(modesFor(['reverse'], { ...kanji, hasMeanings: false })).toEqual(['meaning']); // rien à afficher : repli
+  });
   it('retombe sur l\'exercice de base de la famille si rien ne convient', () => {
     expect(modesFor(['drawing'], { ...kana, hasStrokes: false })).toEqual(['choice']);
     expect(modesFor(['choice', 'typing'], kanji)).toEqual(['meaning']); // session « QCM de kana » avec des kanji
@@ -111,5 +124,49 @@ describe('buildMeaningChoices', () => {
   });
   it('se contente des leurres disponibles', () => {
     expect(buildMeaningChoices({ meanings: ['un'], language: 'fr' }, [{ meaning: 'deux', language: 'fr' }])).toHaveLength(2);
+  });
+});
+
+describe('buildReverseChoices', () => {
+  const kana = (character: string, ...readings: string[]) => ({ character, readings, meanings: [] as string[] });
+  const kanji = (character: string, ...meanings: string[]) => ({ character, readings: [] as string[], meanings });
+  const hiragana = [kana('あ', 'a'), kana('い', 'i'), kana('う', 'u'), kana('え', 'e'), kana('お', 'o'), kana('を', 'wo', 'o'), kana('し', 'shi', 'si')];
+
+  it('kana : le bon caractère et 3 leurres distincts', () => {
+    const choices = buildReverseChoices(kana('か', 'ka'), 'reading', [hiragana]);
+    expect(choices).toHaveLength(4);
+    expect(new Set(choices).size).toBe(4);
+    expect(choices).toContain('か');
+  });
+
+  it('kana : écarte un leurre qui se lit aussi comme la lecture affichée (お et を)', () => {
+    for (let i = 0; i < 50; i++) {
+      expect(buildReverseChoices(kana('お', 'o'), 'reading', [hiragana])).not.toContain('を');
+      expect(buildReverseChoices(kana('を', 'wo', 'o'), 'reading', [hiragana])).not.toContain('お');
+    }
+  });
+
+  it('kanji : écarte un leurre qui partage un sens, sans tenir compte de la casse', () => {
+    const pool = [kanji('月', 'lune', 'mois'), kanji('火', 'feu'), kanji('水', 'eau'), kanji('木', 'arbre'), kanji('曜', 'Jour', 'éclat')];
+    for (let i = 0; i < 50; i++) {
+      const choices = buildReverseChoices(kanji('日', 'jour', 'soleil'), 'meaning', [pool]);
+      expect(choices).toContain('日');
+      expect(choices).not.toContain('曜');
+    }
+  });
+
+  it('prend les leurres du premier lot d\'abord (même niveau), puis du suivant', () => {
+    const near = [kanji('一', 'un'), kanji('二', 'deux')];
+    const far = [kanji('龍', 'dragon'), kanji('鷹', 'faucon'), kanji('鯨', 'baleine')];
+    for (let i = 0; i < 30; i++) {
+      const choices = buildReverseChoices(kanji('日', 'jour'), 'meaning', [near, far]);
+      expect(choices).toEqual(expect.arrayContaining(['日', '一', '二']));
+      expect(choices).toHaveLength(4);
+    }
+  });
+
+  it('se contente des leurres disponibles et ne propose jamais deux fois le même caractère', () => {
+    const choices = buildReverseChoices(kana('か', 'ka'), 'reading', [[kana('か', 'ka'), kana('き', 'ki')], [kana('き', 'ki')]]);
+    expect(choices.sort()).toEqual(['か', 'き']);
   });
 });

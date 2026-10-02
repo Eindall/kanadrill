@@ -113,16 +113,25 @@ const OPTION =
           </div>
         }
 
-        @if (touch) {
-          <div class="flex flex-col gap-3" role="group" aria-labelledby="modes-drawing">
-            <h2 id="modes-drawing" class="text-sm font-medium uppercase tracking-wide text-ink-soft">Écriture</h2>
+        @if (showKana() || showKanji()) {
+          <div class="flex flex-col gap-3" role="group" aria-labelledby="modes-common">
+            <h2 id="modes-common" class="text-sm font-medium uppercase tracking-wide text-ink-soft">Kana et kanji</h2>
             <label [class]="option">
-              <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes('drawing')" (change)="toggleMode('drawing')" />
+              <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes('reverse')" (change)="toggleMode('reverse')" />
               <span class="flex flex-col">
-                <span class="font-medium">{{ modeLabels.drawing }}</span>
-                <span class="text-sm text-ink-soft">Dessine le caractère, puis compare-le au modèle (kana et kanji cochés).</span>
+                <span class="font-medium">{{ modeLabels.reverse }}</span>
+                <span class="text-sm text-ink-soft">On voit la lecture d'un kana ou le sens d'un kanji : retrouve le bon caractère.</span>
               </span>
             </label>
+            @if (touch) {
+              <label [class]="option">
+                <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes('drawing')" (change)="toggleMode('drawing')" />
+                <span class="flex flex-col">
+                  <span class="font-medium">{{ modeLabels.drawing }}</span>
+                  <span class="text-sm text-ink-soft">Dessine le caractère, puis compare-le au modèle.</span>
+                </span>
+              </label>
+            }
           </div>
         }
       </fieldset>

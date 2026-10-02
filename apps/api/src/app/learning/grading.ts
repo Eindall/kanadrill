@@ -16,7 +16,14 @@ export const FAST_READING_MS = 4_000;
  * Faux → Again ; juste → Good, Hard si lent, Easy si rapide et saisie (jamais Easy au QCM : on peut deviner).
  * Au tracé, jamais Easy non plus ; le seuil de lenteur est plus large, et un verdict « approximatif » donne Hard.
  */
-export function gradeAnswer(input: { correct: boolean; mode: ReviewMode; durationMs: number; answer?: string }): ReviewRating {
+export function gradeAnswer(input: {
+  correct: boolean;
+  mode: ReviewMode;
+  durationMs: number;
+  answer?: string;
+  /** L'élément est un kanji (les seuils des QCM sont plus larges). */
+  kanji?: boolean;
+}): ReviewRating {
   const { mode, durationMs } = input;
   if (!input.correct) return REVIEW_RATING.Again;
   switch (mode) {
@@ -25,6 +32,8 @@ export function gradeAnswer(input: { correct: boolean; mode: ReviewMode; duratio
       return input.answer === DRAWING_ANSWERS.fair || durationMs > SLOW_DRAWING_MS ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
     case 'meaning':
       return durationMs > SLOW_MEANING_MS ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
+    case 'reverse': // QCM : jamais Easy ; un kanji se retrouve moins vite qu'un kana
+      return durationMs > (input.kanji ? SLOW_MEANING_MS : SLOW_ANSWER_MS) ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
     case 'reading':
       if (durationMs > SLOW_READING_MS) return REVIEW_RATING.Hard;
       return durationMs < FAST_READING_MS ? REVIEW_RATING.Easy : REVIEW_RATING.Good;

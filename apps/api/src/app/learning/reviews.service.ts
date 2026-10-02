@@ -24,7 +24,7 @@ import {
 } from '@kanadrill/shared';
 import { DEFAULT_TIMEZONE } from '../config/env';
 import { User } from '../users/user.entity';
-import { buildChoices, buildMeaningChoices, type MeaningDecoy } from './choices';
+import { buildChoices, buildMeaningChoices, buildReverseChoices, type MeaningDecoy, type ReverseSubject } from './choices';
 import { composeSession, modesFor, pickMode, type CardOrigin } from './compose-session';
 import { applyCard, toCard } from './fsrs-card';
 import { gradeAnswer } from './grading';
@@ -44,6 +44,8 @@ interface SessionItem {
   kanji?: KanjiReadings;
   /** Langue des sens (kanji). */
   language: string;
+  /** Niveau JLPT (« N5 »…) ou « other » (kanji). */
+  level: string;
   strokeCount: number;
 }
 
@@ -57,17 +59,14 @@ interface SessionItemRow {
   on: string[] | null;
   kun: string[] | null;
   language: string | null;
+  level: string | null;
   stroke_count: string | number;
 }
 
 /** Les leurres d'un QCM de sens : on n'en tire que quelques centaines au hasard, pas les 10 000 kanji. */
 const MEANING_DECOY_SAMPLE = 400;
-
-const answerable = (item: Pick<SessionItem, 'readings' | 'meanings' | 'kanji'>): AnswerableItem => ({
-  readings: item.readings,
-  meanings: item.meanings,
-  kanji: item.kanji,
-});
+/** Leurres du QCM inversé de kanji : autant par niveau JLPT. */
+const KANJI_DECOYS_PER_LEVEL = 60;
 
 @Injectable()
 export class ReviewsService {
@@ -123,6 +122,10 @@ export class ReviewsService {
     const pools = new Map<string, SessionItem[]>();
     for (const item of items) pools.set(item.type, [...(pools.get(item.type) ?? []), item]);
     const decoys = modes.includes('meaning') ? await this.sampleMeaningDecoys() : [];
+    // Leurres du QCM inversé d'un kanji : des kanji du même niveau JLPT (sinon la rareté du caractère trahit la réponse).
+    const kanjiByLevel = composed.some(({ candidate }, i) => modes[i] === 'reverse' && candidate.item.type === 'kanji')
+      ? await this.sampleKanjiByLevel()
+      : new Map<string, ReverseSubject[]>();
     // Modèles de tracé : seulement pour les cartes de tracé.
     const strokes = await this.loadStrokes(composed.filter((_, i) => modes[i] === 'drawing').map(({ candidate }) => candidate.item.id));
 
@@ -134,6 +137,7 @@ export class ReviewsService {
         mode,
         ...(mode === 'choice' ? { choices: buildChoices(item, pools.get(item.type) ?? []) } : {}),
         ...(mode === 'meaning' ? { choices: buildMeaningChoices(item, decoys) } : {}),
+        ...(mode === 'reverse' ? { choices: this.reverseChoices(item, pools, kanjiByLevel) } : {}),
         ...(mode === 'drawing' ? { strokes: strokes.get(item.id) ?? [] } : {}),
         isNew: origin === 'new',
       };
@@ -151,7 +155,7 @@ export class ReviewsService {
     const kanaTypes = config.types.filter((type) => KANA_TYPES.includes(type));
     const rows: SessionItemRow[] = await this.dataSource.query(
       `SELECT i.id, i.type, i.character, i.readings, i.meanings, i.sort_order,
-              i.metadata -> 'on' AS "on", i.metadata -> 'kun' AS kun, i.metadata ->> 'language' AS language,
+              i.metadata -> 'on' AS "on", i.metadata -> 'kun' AS kun, i.metadata ->> 'language' AS language, coalesce(i.metadata ->> 'jlpt', 'other') AS level,
               coalesce(jsonb_array_length(i.metadata -> 'strokes'), 0) AS stroke_count
        FROM items i
        WHERE i.type = ANY($1)
@@ -168,8 +172,31 @@ export class ReviewsService {
       sortOrder: row.sort_order,
       kanji: row.type === 'kanji' ? { on: row.on ?? [], kun: row.kun ?? [] } : undefined,
       language: row.language ?? 'en',
+      level: row.level ?? 'other',
       strokeCount: Number(row.stroke_count),
     }));
+  }
+
+  /** Quatre caractères dont le bon : des kana du même type (qui ne se lisent pas pareil), ou des kanji du même niveau. */
+  private reverseChoices(item: SessionItem, pools: Map<string, SessionItem[]>, kanjiByLevel: Map<string, ReverseSubject[]>): string[] {
+    if (item.type !== 'kanji') return buildReverseChoices(item, 'reading', [pools.get(item.type) ?? []]);
+    const sameLevel = kanjiByLevel.get(item.level) ?? [];
+    const others = [...kanjiByLevel.entries()].filter(([level]) => level !== item.level).flatMap(([, subjects]) => subjects);
+    return buildReverseChoices(item, 'meaning', [sameLevel, others]);
+  }
+
+  /** Quelques dizaines de kanji tirés au hasard dans chaque niveau, pour les leurres (jamais les 10 000). */
+  private async sampleKanjiByLevel(): Promise<Map<string, ReverseSubject[]>> {
+    const rows: Array<{ character: string; readings: string[]; meanings: string[]; level: string }> = await this.dataSource.query(
+      `SELECT character, readings, meanings, level FROM (
+         SELECT character, readings, meanings, coalesce(metadata ->> 'jlpt', 'other') AS level,
+                row_number() OVER (PARTITION BY coalesce(metadata ->> 'jlpt', 'other') ORDER BY random()) AS rank
+         FROM items WHERE type = 'kanji' AND cardinality(meanings) > 0
+       ) sample WHERE rank <= ${KANJI_DECOYS_PER_LEVEL}`,
+    );
+    const byLevel = new Map<string, ReverseSubject[]>();
+    for (const row of rows) byLevel.set(row.level, [...(byLevel.get(row.level) ?? []), row]);
+    return byLevel;
   }
 
   private async sampleMeaningDecoys(): Promise<MeaningDecoy[]> {
@@ -239,12 +266,19 @@ export class ReviewsService {
 
     const meta = (item.metadata ?? {}) as { on?: string[]; kun?: string[] };
     const subject: AnswerableItem = {
+      character: item.character,
       readings: item.readings,
       meanings: item.meanings,
       kanji: item.type === 'kanji' ? { on: meta.on ?? [], kun: meta.kun ?? [] } : undefined,
     };
     const correct = isAnswerCorrect(request.mode, request.answer, subject);
-    const rating = gradeAnswer({ correct, mode: request.mode, durationMs: request.durationMs, answer: request.answer });
+    const rating = gradeAnswer({
+      correct,
+      mode: request.mode,
+      durationMs: request.durationMs,
+      answer: request.answer,
+      kanji: item.type === 'kanji',
+    });
 
     const nextDue = await this.dataSource.transaction(async (manager) => {
       // Première réponse : la carte est créée avec les valeurs par défaut (= carte vierge).

@@ -149,15 +149,16 @@ export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana', 'kanj
  * QCM (retrouver la lecture parmi des propositions), saisie libre du romaji, ou tracé : on voit la lecture, on
  * dessine le kana à la main, puis on s'auto-évalue face au modèle (le tracé n'est proposé que sur écran tactile).
  */
-export type ReviewMode = 'choice' | 'typing' | 'drawing' | 'meaning' | 'reading';
-export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'meaning', 'reading'];
+export type ReviewMode = 'choice' | 'typing' | 'drawing' | 'meaning' | 'reading' | 'reverse';
+export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'meaning', 'reading', 'reverse'];
 
 /**
  * Exercices propres à chaque famille : un kana se demande par sa lecture (QCM ou saisie), un kanji par son sens
- * (QCM) ou sa lecture (saisie en romaji ou en kana) ; le tracé vaut pour les deux.
+ * (QCM) ou sa lecture (saisie en romaji ou en kana) ; le tracé et le QCM inversé (on voit la lecture d'un kana ou
+ * le sens d'un kanji, et on retrouve le caractère parmi quatre) valent pour les deux.
  */
-export const KANA_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing'];
-export const KANJI_MODES: readonly ReviewMode[] = ['meaning', 'reading', 'drawing'];
+export const KANA_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'reverse'];
+export const KANJI_MODES: readonly ReviewMode[] = ['meaning', 'reading', 'drawing', 'reverse'];
 export const isKanjiType = (type: ItemType): boolean => type === 'kanji';
 export const modesOfType = (type: ItemType): readonly ReviewMode[] => (isKanjiType(type) ? KANJI_MODES : KANA_MODES);
 
@@ -173,7 +174,9 @@ export const MAX_REVIEW_DURATION_MS = 120_000;
 export interface SessionCardDto {
   item: ItemDto;
   mode: ReviewMode;
-  /** Propositions du QCM (la bonne réponse y figure), uniquement si `mode` vaut `choice`. */
+  /**
+   * Propositions du QCM (la bonne réponse y figure) : lectures (`choice`), sens (`meaning`) ou caractères (`reverse`).
+   */
   choices?: string[];
   /** Modèle du tracé (ordre des traits), uniquement si `mode` vaut `drawing`. */
   strokes?: StrokeDto[];
@@ -210,7 +213,7 @@ export interface ReviewOverviewDto {
 export interface SubmitReviewRequest {
   itemId: string;
   mode: ReviewMode;
-  /** Romaji saisi, proposition choisie au QCM, ou auto-évaluation du tracé (`DRAWING_ANSWERS`). */
+  /** Romaji saisi, proposition choisie au QCM (le caractère choisi, à l'envers), ou verdict du tracé (`DRAWING_ANSWERS`). */
   answer: string;
   durationMs: number;
 }

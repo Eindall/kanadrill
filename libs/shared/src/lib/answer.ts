@@ -4,6 +4,8 @@ import { isRomajiCorrect } from './romaji';
 
 /** Ce qu'il faut savoir d'un élément pour corriger une réponse. */
 export interface AnswerableItem {
+  /** Le caractère (nécessaire au QCM inversé : la réponse est le caractère choisi). */
+  character?: string;
   readings: readonly string[];
   meanings: readonly string[];
   /** Présent pour un kanji. */
@@ -37,6 +39,8 @@ export function isAnswerCorrect(mode: ReviewMode, answer: string, item: Answerab
     }
     case 'reading':
       return isReadingCorrect(answer, item.readings);
+    case 'reverse':
+      return item.character !== undefined && answer === item.character;
     default:
       return isRomajiCorrect(answer, item.readings);
   }
@@ -63,6 +67,7 @@ export function displayReadings(kanji: KanjiReadings): string {
 
 /** La bonne réponse à afficher en cas d'erreur, selon l'exercice. */
 export function expectedAnswer(mode: ReviewMode, item: AnswerableItem): string {
+  if (mode === 'reverse') return item.character ?? '';
   if (mode === 'meaning') return displayMeanings(item);
   if (mode === 'reading') return item.kanji ? displayReadings(item.kanji) : (item.readings[0] ?? '');
   if (mode === 'drawing' && item.kanji) return displayMeanings(item);

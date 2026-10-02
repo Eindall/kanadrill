@@ -202,6 +202,28 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       expect(kanji.every((card) => card.mode === 'meaning')).toBe(true);
     });
 
+    it('propose le QCM inversé d\'un kanji : le bon kanji parmi quatre, du même niveau JLPT, sans sens partagé', async () => {
+      const session = await getSession(cookieA, 'count=50&types=kanji&modes=reverse');
+      expect(session.cards.every((card) => card.mode === 'reverse' && card.choices?.length === 4)).toBe(true);
+      const levels = await dataSource.query(`SELECT character, coalesce(metadata ->> 'jlpt', 'other') AS level, meanings FROM items WHERE type = 'kanji'`);
+      const byChar = new Map<string, { level: string; meanings: string[] }>(levels.map((row: { character: string; level: string; meanings: string[] }) => [row.character, row]));
+      for (const card of session.cards) {
+        expect(card.choices).toContain(card.item.character);
+        const mine = byChar.get(card.item.character)!;
+        for (const choice of card.choices!.filter((c) => c !== card.item.character)) {
+          const other = byChar.get(choice)!;
+          expect(other.level).toBe(mine.level); // 79 kanji N5 : assez de leurres du même niveau
+          expect(other.meanings.some((m) => mine.meanings.map((x) => x.toLowerCase()).includes(m.toLowerCase()))).toBe(false);
+        }
+      }
+    });
+
+    it('corrige le QCM inversé d\'un kanji', async () => {
+      const id = await idOf('日');
+      expect(await json<ReviewResultDto>(await answer(cookieA, id, 'reverse', '日'))).toMatchObject({ correct: true, expected: '日' });
+      expect(await json<ReviewResultDto>(await answer(cookieA, id, 'reverse', '月'))).toMatchObject({ correct: false, expected: '日' });
+    });
+
     it('retombe sur le sens quand un réglage « kana » ne convient pas aux kanji', async () => {
       const session = await getSession(cookieA, 'count=15&types=kanji&modes=choice,typing');
       expect(session.cards.every((card) => card.mode === 'meaning')).toBe(true);

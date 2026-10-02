@@ -18,6 +18,7 @@ export const MODE_LABELS: Record<ReviewMode, string> = {
   meaning: 'Sens (QCM)',
   reading: 'Lecture (romaji ou kana)',
   drawing: 'Tracé au doigt',
+  reverse: 'QCM inversé',
 };
 export const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
 

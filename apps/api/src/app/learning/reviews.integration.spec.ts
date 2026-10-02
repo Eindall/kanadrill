@@ -52,7 +52,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     (await (await call(cookie, 'GET', sessionUrl(query))).json()) as ReviewSessionDto;
   const getOverview = async (cookie: string) =>
     (await (await call(cookie, 'GET', '/reviews/overview')).json()) as ReviewOverviewDto;
-  const answer = (cookie: string, id: string, answerText: string, mode: 'choice' | 'typing' | 'drawing' = 'choice', durationMs = 3000) =>
+  const answer = (cookie: string, id: string, answerText: string, mode: 'choice' | 'typing' | 'drawing' | 'reverse' = 'choice', durationMs = 3000) =>
     call(cookie, 'POST', '/reviews', { itemId: id, mode, answer: answerText, durationMs });
   const characters = (session: ReviewSessionDto) => session.cards.map((card) => card.item.character);
 
@@ -170,6 +170,26 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     // Ce que l'utilisateur « écrit » n'a pas de sens au tracé : seul le verdict compte.
     const other = (await (await answer(cookieD, await itemId('ほ'), 'ho', 'drawing', 9000)).json()) as ReviewResultDto;
     expect(other.correct).toBe(false);
+  });
+
+  it('propose le QCM inversé : les caractères à choisir, sans lecture ambiguë', async () => {
+    const session = await getSession(cookieA, 'count=50&types=hiragana,katakana&modes=reverse');
+    expect(session.cards.every((card) => card.mode === 'reverse' && card.choices?.length === 4)).toBe(true);
+    for (const card of session.cards) {
+      expect(card.choices).toContain(card.item.character);
+      expect(card.choices!.every((choice) => [...choice].every((c) => (card.item.type === 'katakana') === /[\u30a0-\u30ff]/.test(c)))).toBe(true);
+    }
+    // お et を se lisent « o » : jamais ensemble dans un QCM inversé.
+    expect(session.cards.every((card) => !(card.choices!.includes('お') && card.choices!.includes('を')))).toBe(true);
+  });
+
+  it('corrige le QCM inversé : seul le bon caractère est juste', async () => {
+    const dave = await dataSource.getRepository(User).save({ username: 'erin', avatarUrl: null });
+    const cookieE = await loginAs(dave.id);
+    const good = (await (await answer(cookieE, await itemId('む'), 'む', 'reverse', 3000)).json()) as ReviewResultDto;
+    expect(good).toMatchObject({ correct: true, expected: 'む', rating: 3 });
+    const bad = (await (await answer(cookieE, await itemId('ま'), 'む', 'reverse', 3000)).json()) as ReviewResultDto;
+    expect(bad).toMatchObject({ correct: false, expected: 'ま', rating: 1 });
   });
 
   it('indique les cartes disponibles par type et l\'objectif du jour', async () => {
