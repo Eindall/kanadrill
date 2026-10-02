@@ -12,14 +12,15 @@ import { Logo } from './logo';
   template: `
     <header class="border-b border-line bg-paper">
       <div class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-6 px-4 pt-3 sm:flex-nowrap sm:py-3">
-        <a routerLink="/" aria-label="KanaDrill, accueil" title="KanaDrill"><app-logo /></a>
+        <app-logo />
 
         <!-- Sur mobile le menu passe sur sa propre ligne, sous le logo et l'avatar -->
-        <nav aria-label="Navigation principale" class="order-last flex w-full gap-5 overflow-x-auto pt-1 sm:order-none sm:w-auto sm:flex-1 sm:overflow-visible sm:pt-0">
+        <nav aria-label="Navigation principale" class="order-last flex w-full gap-4 overflow-x-auto pt-1 text-[0.95rem] max-[380px]:gap-3 max-[380px]:text-sm sm:order-none sm:w-auto sm:flex-1 sm:gap-5 sm:overflow-visible sm:pt-0 sm:text-base">
           @for (link of links; track link.path) {
             <a
               [routerLink]="link.path"
-              routerLinkActive="border-ink text-ink"
+              routerLinkActive="border-ink! text-ink!"
+              [routerLinkActiveOptions]="{ exact: link.exact }"
               ariaCurrentWhenActive="page"
               class="whitespace-nowrap border-b-2 border-transparent py-2 text-ink-soft hover:text-ink"
             >
@@ -72,9 +73,10 @@ import { Logo } from './logo';
 export class Shell {
   /** Le menu principal. */
   protected readonly links = [
-    { path: '/learn', label: 'Apprendre' },
-    { path: '/stats', label: 'Statistiques' },
-    { path: '/leaderboard', label: 'Classement' },
+    { path: '/', label: 'Accueil', exact: true },
+    { path: '/learn', label: 'Apprendre', exact: false },
+    { path: '/stats', label: 'Statistiques', exact: false },
+    { path: '/leaderboard', label: 'Classement', exact: false },
   ];
   private readonly router = inject(Router);
   protected readonly auth = inject(AuthService);
