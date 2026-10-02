@@ -129,6 +129,27 @@ export interface KanjiLevelSummaryDto {
   inDictionary: number;
 }
 
+/** Le « kanji de la semaine » proposé sur l'accueil. */
+export interface WeeklyKanjiDto {
+  id: string;
+  character: string;
+  /** Sens, en français quand KANJIDIC2 en a, sinon en anglais (les premiers). */
+  meanings: string[];
+  on: string[];
+  kun: string[];
+  jlpt: JlptLevel | null;
+  /** Déjà dans le dictionnaire (ajouté depuis l'accueil, la fiche ou un ajout de niveau). */
+  inDictionary: boolean;
+  /** Lundi de la semaine concernée, et lundi suivant (jour du prochain kanji), `AAAA-MM-JJ`. */
+  weekStart: string;
+  nextChange: string;
+}
+
+/** `kanji` vaut `null` quand tous les kanji sont déjà dans le dictionnaire : plus rien à suggérer. */
+export interface WeeklyKanjiResponse {
+  kanji: WeeklyKanjiDto | null;
+}
+
 /** Nombre maximal de kanji ajoutés d'un coup au dictionnaire. */
 export const MAX_DICTIONARY_BATCH = 500;
 

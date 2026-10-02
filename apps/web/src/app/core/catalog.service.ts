@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { KANJI_PAGE_SIZE, type CatalogItemDto, type ItemDetailDto, type KanjiLevel, type KanjiLevelSummaryDto, type KanjiPageDto } from '@kanadrill/shared';
+import { KANJI_PAGE_SIZE, type CatalogItemDto, type WeeklyKanjiDto, type WeeklyKanjiResponse, type ItemDetailDto, type KanjiLevel, type KanjiLevelSummaryDto, type KanjiPageDto } from '@kanadrill/shared';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -13,6 +13,11 @@ export class CatalogService {
 
   loadItem(id: string): Promise<ItemDetailDto> {
     return firstValueFrom(this.http.get<ItemDetailDto>(`/api/catalog/${encodeURIComponent(id)}`));
+  }
+
+  /** Le « kanji de la semaine » (`null` : tous les kanji sont déjà dans le dictionnaire). */
+  async loadWeeklyKanji(): Promise<WeeklyKanjiDto | null> {
+    return (await firstValueFrom(this.http.get<WeeklyKanjiResponse>('/api/kanji/weekly'))).kanji;
   }
 
   loadKanjiLevels(): Promise<KanjiLevelSummaryDto[]> {

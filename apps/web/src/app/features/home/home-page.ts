@@ -7,10 +7,11 @@ import { ReviewService } from '../../core/review.service';
 import { StatsService } from '../../core/stats.service';
 import { FlameIcon } from '../stats/flame-icon';
 import { StreakTimeline } from '../stats/streak-timeline';
+import { WeeklyKanjiCard } from './weekly-kanji-card';
 
 @Component({
   selector: 'app-home-page',
-  imports: [RouterLink, FlameIcon, StreakTimeline],
+  imports: [RouterLink, FlameIcon, StreakTimeline, WeeklyKanjiCard],
   template: `
     <section class="flex flex-col gap-8">
       <h1 class="text-2xl font-semibold tracking-tight">
@@ -80,6 +81,8 @@ import { StreakTimeline } from '../stats/streak-timeline';
           <p role="status" class="text-ink-soft">Chargement de tes révisions…</p>
         }
       </div>
+
+      <app-weekly-kanji-card />
     </section>
   `,
 })
