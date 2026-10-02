@@ -1,0 +1,62 @@
+name: CI / Déploiement
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+# Un seul déploiement à la fois, sans interrompre celui en cours.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kanadrill
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: kanadrill_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kanadrill -d kanadrill_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://kanadrill:ci@127.0.0.1:5432/kanadrill_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx nx run-many -t build test -p api web
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déployer sur le VPS
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          # La clé est limitée côté VPS à scripts/deploy.sh : on lui passe seulement le SHA à déployer.
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -p "${VPS_PORT:-22}" "$VPS_USER@$VPS_HOST" "$GITHUB_SHA"
