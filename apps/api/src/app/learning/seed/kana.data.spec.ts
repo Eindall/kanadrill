@@ -28,6 +28,15 @@ describe('données des kana', () => {
     expect(byOrder.slice(104).every((s) => s.type === 'katakana')).toBe(true);
   });
 
+  it('classe chaque kana dans son groupe, avec ses tracés', () => {
+    const seeds = buildKanaSeeds();
+    const count = (group: string) => seeds.filter((s) => s.type === 'hiragana' && s.metadata.group === group).length;
+    expect([count('base'), count('voiced'), count('yoon')]).toEqual([46, 25, 33]);
+    expect(seeds.find((s) => s.character === 'ガ')?.metadata.group).toBe('voiced');
+    expect(seeds.find((s) => s.character === 'キャ')?.metadata.group).toBe('yoon');
+    expect(seeds.every((s) => s.metadata.strokes.length > 0)).toBe(true);
+  });
+
   it('dérive correctement le katakana', () => {
     expect(toKatakana('あ')).toBe('ア');
     expect(toKatakana('きゃ')).toBe('キャ');

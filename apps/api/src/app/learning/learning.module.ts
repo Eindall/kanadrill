@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SessionModule } from '../auth/session.module';
 import { User } from '../users/user.entity';
+import { CatalogController } from './catalog.controller';
+import { CatalogService } from './catalog.service';
 import { Item } from './item.entity';
 import { ReviewsController } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
@@ -10,7 +12,7 @@ import { UserItem } from './user-item.entity';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, Item, UserItem]), SessionModule],
-  controllers: [ReviewsController],
-  providers: [SeedService, ReviewsService],
+  controllers: [ReviewsController, CatalogController],
+  providers: [SeedService, ReviewsService, CatalogService],
 })
 export class LearningModule {}

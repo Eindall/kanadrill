@@ -22,6 +22,49 @@ export interface ItemDto {
   meanings: string[];
 }
 
+/** Les types qui sont des kana (ils sont d'office dans le dictionnaire de chacun). */
+export const KANA_TYPES: readonly ItemType[] = ['hiragana', 'katakana'];
+
+/** Groupes de kana, dans l'ordre d'apprentissage : base, dakuten / handakuten, yōon. */
+export const KANA_GROUPS = ['base', 'voiced', 'yoon'] as const;
+export type KanaGroup = (typeof KANA_GROUPS)[number];
+
+/** Un trait d'un tracé (KanjiVG, repère 109 × 109) : chemin SVG et position de son numéro. */
+export interface StrokeDto {
+  d: string;
+  n: [x: number, y: number];
+}
+
+/** Niveau de maîtrise d'un élément pour un utilisateur : jamais vu, en cours, connu, solide. */
+export const MASTERY_LEVELS = ['unseen', 'learning', 'known', 'mastered'] as const;
+export type MasteryLevel = (typeof MASTERY_LEVELS)[number];
+
+/** Un élément du catalogue du mode « Apprendre », avec la maîtrise de l'utilisateur. */
+export interface CatalogItemDto {
+  id: string;
+  type: ItemType;
+  character: string;
+  /** Lecture de référence (romaji). */
+  reading: string;
+  /** Groupe de kana ; `null` pour un kanji. */
+  group: KanaGroup | null;
+  mastery: MasteryLevel;
+}
+
+/** Fiche détail d'un élément. */
+export interface ItemDetailDto extends CatalogItemDto {
+  /** Tous les romaji acceptés. */
+  readings: string[];
+  meanings: string[];
+  /** Traits dans l'ordre d'écriture (vide si KanjiVG ne couvre pas l'élément). */
+  strokes: StrokeDto[];
+  /** Nombre de réponses données et de ratés. */
+  reps: number;
+  lapses: number;
+  /** Prochaine échéance (ISO 8601), `null` si jamais révisé. */
+  nextDue: string | null;
+}
+
 /** Objectif quotidien (nombre de cartes à tenter par jour) : défaut et bornes, modifiable par utilisateur. */
 export const DEFAULT_DAILY_GOAL = 30;
 export const MIN_DAILY_GOAL = 1;

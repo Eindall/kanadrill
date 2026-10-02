@@ -4,6 +4,8 @@
  * Le katakana est dérivé du hiragana (décalage Unicode de 0x60) : une seule table à maintenir.
  * Hors périmètre : kana rares ou désuets (ゐ ゑ ヴ) et extensions du katakana (ファ, ティ…).
  */
+import type { KanaGroup } from '@kanadrill/shared';
+
 export type KanaEntry = readonly [hiragana: string, readings: readonly string[]];
 
 const BASE: KanaEntry[] = [
@@ -38,6 +40,13 @@ const YOON_SMALL: ReadonlyArray<readonly [kana: string, vowel: string]> = [['ゃ
 const YOON: KanaEntry[] = YOON_CONSONANTS.flatMap(([kana, consonants]) =>
   YOON_SMALL.map(([small, vowel]): KanaEntry => [kana + small, consonants.map((c) => c + vowel)]),
 );
+
+/** Les entrées par groupe, dans l'ordre d'apprentissage. */
+export const KANA_GROUP_ENTRIES: Readonly<Record<KanaGroup, readonly KanaEntry[]>> = {
+  base: BASE,
+  voiced: VOICED,
+  yoon: YOON,
+};
 
 export const HIRAGANA_ENTRIES: readonly KanaEntry[] = [...BASE, ...VOICED, ...YOON];
 

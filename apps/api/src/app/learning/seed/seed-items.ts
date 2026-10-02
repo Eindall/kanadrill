@@ -1,7 +1,8 @@
 import { DataSource } from 'typeorm';
-import type { ItemType } from '@kanadrill/shared';
+import { KANA_GROUPS, type ItemType, type KanaGroup, type StrokeDto } from '@kanadrill/shared';
 import { Item } from '../item.entity';
-import { HIRAGANA_ENTRIES, toKatakana } from './kana.data';
+import { KANA_GROUP_ENTRIES, toKatakana, type KanaEntry } from './kana.data';
+import { kanaStrokes } from './kana-strokes';
 
 interface ItemSeed {
   type: ItemType;
@@ -9,6 +10,8 @@ interface ItemSeed {
   readings: string[];
   meanings: string[];
   sortOrder: number;
+  /** `group` (kana) et `strokes` (ordre des traits, KanjiVG). */
+  metadata: { group: KanaGroup; strokes: StrokeDto[] };
 }
 
 /** Les katakana viennent après tous les hiragana (jeu de 104 kana + marge). */
@@ -16,20 +19,28 @@ const KATAKANA_OFFSET = 1000;
 
 export function buildKanaSeeds(): ItemSeed[] {
   // Ordre d'introduction : tout le hiragana, puis tout le katakana, chacun dans l'ordre de la table.
-  const hiragana = HIRAGANA_ENTRIES.map(([character, readings], index): ItemSeed => ({
+  const entries = KANA_GROUPS.flatMap((group) =>
+    KANA_GROUP_ENTRIES[group].map((entry): [KanaGroup, KanaEntry] => [group, entry]),
+  );
+  const hiragana = entries.map(([group, [character, readings]], index): ItemSeed => ({
     type: 'hiragana',
     character,
     readings: [...readings],
     meanings: [],
     sortOrder: index,
+    metadata: { group, strokes: kanaStrokes(character) },
   }));
-  const katakana = HIRAGANA_ENTRIES.map(([character, readings], index): ItemSeed => ({
-    type: 'katakana',
-    character: toKatakana(character),
-    readings: [...readings],
-    meanings: [],
-    sortOrder: KATAKANA_OFFSET + index,
-  }));
+  const katakana = entries.map(([group, [hiraganaCharacter, readings]], index): ItemSeed => {
+    const character = toKatakana(hiraganaCharacter);
+    return {
+      type: 'katakana',
+      character,
+      readings: [...readings],
+      meanings: [],
+      sortOrder: KATAKANA_OFFSET + index,
+      metadata: { group, strokes: kanaStrokes(character) },
+    };
+  });
   return [...hiragana, ...katakana];
 }
 
@@ -44,7 +55,7 @@ export async function seedItems(dataSource: DataSource): Promise<number> {
     .insert()
     .into(Item)
     .values(seeds)
-    .orUpdate(['readings', 'meanings', 'sort_order'], ['type', 'character'])
+    .orUpdate(['readings', 'meanings', 'sort_order', 'metadata'], ['type', 'character'])
     .execute();
   return seeds.length;
 }

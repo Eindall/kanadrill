@@ -38,6 +38,10 @@ import { AuthService } from '../core/auth.service';
     <main class="mx-auto max-w-3xl px-4 py-8">
       <router-outlet />
     </main>
+
+    <footer class="mx-auto max-w-3xl px-4 pb-8 text-sm text-ink-soft">
+      <a routerLink="/about" class="underline underline-offset-4 hover:text-ink">À propos et licences</a>
+    </footer>
   `,
 })
 export class Shell {

@@ -73,9 +73,18 @@ libs/shared         Types et constantes partagés (UserDto, règles du pseudo, f
 - **Limites connues** : `POST /reviews` n'est pas idempotent (un renvoi réseau compterait deux révisions) ; une bonne réponse à une carte en apprentissage n'est pas reposée dans la session (seules les ratées le sont) ; les réponses des cartes de complément (cycle, cartes pas encore dues) passent par FSRS comme les autres (choix assumé : un peu de précision de planification en moins) ; une première session peut proposer jusqu'à 50 cartes toutes nouvelles (on règle la taille soi-même).
 - Le flux a été essayé à la main avec une vraie connexion Discord (OK) ; l'API est couverte par `reviews.integration.spec.ts`.
 
+### Mode « Apprendre » pour les kana (implémenté, `learning/catalog.*`, `features/learn`)
+
+- **Seed** : chaque kana a `metadata = { group, strokes }`. `group` ∈ `base` (46) / `voiced` (25, dakuten et handakuten) / `yoon` (33), dérivé des tables de `kana.data.ts` (`KANA_GROUP_ENTRIES`). `strokes` = traits dans l'ordre d'écriture (`StrokeDto` : chemin SVG `d` + position `n` du numéro, repère 109 × 109 de KanjiVG).
+- **Tracés** : `tools/generate-kana-strokes.py` télécharge les SVG KanjiVG des kana simples (176 glyphes, hiragana et katakana) et écrit `seed/kana-glyphs.data.ts` (**généré et commité**, ne pas éditer ; relancer le script pour le régénérer). Les **yōon sont composés au seed** (`seed/kana-strokes.ts`) : le kana en i réduit à gauche + le petit ゃ / ゅ / ょ plus petit en bas à droite, les chemins SVG étant remis à l'échelle (`transformPath`, sans arcs : KanjiVG n'en utilise pas ici). Le seed met `metadata` à jour à chaque démarrage.
+- **API** (`CatalogController`, protégé) : `GET /api/catalog` = les 208 kana dans l'ordre pédagogique, **sans** les tracés (lourds), avec `reading`, `group`, `mastery` ; `GET /api/catalog/:id` = fiche (lectures, tracés, `reps`, `lapses`, `nextDue`). 400 si l'id n'est pas un UUID, 404 si inconnu.
+- **Maîtrise** (`mastery.ts`, déduite de l'état FSRS, 4 niveaux) : `unseen` (aucune réponse) → `learning` (Learning / Relearning) → `known` (Review) → `mastered` (Review et stabilité ≥ 21 jours, `MASTERED_STABILITY_DAYS`). Affichée sous chaque kana par trois segments (lisible sans la couleur, `aria-label` pour les lecteurs d'écran).
+- **Front** : `/learn` (onglets Hiragana / Katakana, grilles par groupe ; le tableau de base reproduit la disposition classique : や ゆ よ en colonnes a u o, わ を aux extrémités, ん seul, `catalog-layout.ts`), `/learn/:id` (fiche + composant `StrokeOrder` : traits animés un par un par `stroke-dashoffset` avec `pathLength="1"`, fantôme gris, numéros, « Rejouer » ; `prefers-reduced-motion` : tout apparaît d'un coup), `/about` (licences KanjiVG et KANJIDIC2). Accès : bouton « Apprendre » sur l'accueil, lien « À propos » en pied de page.
+- **Pas fait** (volontairement) : le catalogue ne porte que les kana ; les kanji auront leur propre liste (recherche, filtre JLPT) au lot F, à cause de leur nombre. Pas d'étape « marquer comme lu » : consulter une fiche n'écrit rien.
+
 ### Cible : dictionnaire perso, « Apprendre », kanji (reste à faire)
 
-> Déjà fait : sessions paramétrées, cycle, objectif quotidien (voir ci-dessus). Reste : tout ce qui touche au dictionnaire, aux fiches et aux kanji, décrit ici.
+> Déjà fait : sessions paramétrées, cycle, objectif quotidien, mode « Apprendre » pour les kana (voir ci-dessus). Reste : tout ce qui touche au dictionnaire perso et aux kanji, décrit ici.
 
 Ce que cela change dans le modèle :
 
@@ -102,6 +111,8 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 
 - Lot B vérifié dans Chrome (headless, serveur local) : le service worker s'enregistre, une navigation vers `/api/auth/discord` atteint bien le serveur (et échoue sans l'exclusion `/api`, contrôle négatif fait), les routes Angular sont servies par le service worker, `fetch('/api/…')` n'est jamais mis en cache, Chrome ne signale aucune erreur d'installabilité ; en-têtes nginx contrôlés sur l'image web construite (service worker sans cache, manifest en `application/manifest+json`, CSP conservée). Ce script de contrôle n'est pas dans le dépôt.
 
+- Lot D : mode « Apprendre » pour les kana (voir § 3) : tracés KanjiVG des 208 kana, groupes, API du catalogue, maîtrise, pages `/learn`, `/learn/:id`, `/about` ; tests : `kana-strokes.spec.ts`, `mastery.spec.ts`, `catalog.integration.spec.ts`, `catalog-layout.spec.ts`, `stroke-order.spec.ts`. Vérifié dans Chrome (mobile, serveur de dev + API simulée) ; **pas encore vu en production**.
+
 **Déploiement vérifié en production (VPS)** : le flux OAuth avec une vraie application Discord, l'affichage des avatars Discord et le `docker compose` (build et exécution) fonctionnent. Déploiement automatisé par le workflow `deploy.yml`.
 
 **Non vérifié** : rien de connu pour l'instant.
@@ -115,8 +126,8 @@ Fait et vérifié (contre un vrai PostgreSQL, avec un Discord simulé) :
 5. ~~**Lot A** : sessions paramétrées (taille, écritures, exercices, cycle) + objectif quotidien (profil, jauge sur l'accueil), suppression de la limite quotidienne~~ (fait).
 6. ~~**Lot B** : PWA (manifest, icônes, service worker qui ne met en cache que la coque de l'application, jamais l'API ; nginx qui ne met pas en cache le service worker ; bannière de mise à jour)~~ (fait).
 7. ~~**Lot C** : sessions révocables (table `auth_sessions`, expiration glissante 48 h, déconnexion réelle, liste des appareils dans le profil) + sauvegarde de la base (`scripts/backup-db.sh`)~~ (fait). **Déployé sur le VPS et validé** (voir le README, section Production et sauvegarde).
-8. **Lot D** : mode « Apprendre » : catalogue (grilles par écriture et par groupe : `metadata.group` à ajouter au seed), fiches détail des kana avec **ordre des traits animé** (tracés KanjiVG des 208 kana, générés par script et commités), maîtrise par kana ; page « À propos » avec les licences (KanjiVG CC BY-SA, KANJIDIC2 EDRDG).
-9. **Lot E** : exercice de **tracé** sur mobile (canvas tactile + auto-évaluation, mode `drawing` dans le réglage de session), fonctionne déjà sur les kana grâce au lot D ; vérification automatique du tracé = hors périmètre pour l'instant.
+8. ~~**Lot D** : mode « Apprendre » : catalogue (grilles par écriture et par groupe), fiches détail des kana avec ordre des traits animé (tracés KanjiVG des 208 kana, générés par script et commités), maîtrise par kana ; page « À propos » avec les licences (KanjiVG CC BY-SA, KANJIDIC2 EDRDG)~~ (fait ; voir § 3).
+9. **Lot E** : exercice de **tracé** sur mobile (canvas tactile + auto-évaluation, mode `drawing` dans le réglage de session), fonctionne déjà sur les kana grâce au lot D (les tracés sont dans `metadata.strokes`) ; vérification automatique du tracé = hors périmètre pour l'instant.
 10. **Lot F** : kanji : import KANJIDIC2 (JSON généré par script), recherche et ajout par caractère, filtre JLPT, dictionnaire perso (`POST` / `DELETE`), type « kanji » dans les sessions, tracés KanjiVG des kanji, exercices kanji (question à trancher, voir § 3).
 11. **Lot G** : statistiques (activité par jour, réussite, maîtrise par kana, série de jours, prévision des cartes dues ; en SVG/CSS, sans bibliothèque) ; idée : bot Discord (rappels de révision en DM, commandes slash).
 
