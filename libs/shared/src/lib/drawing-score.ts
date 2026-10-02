@@ -8,9 +8,9 @@ import type { StrokeDto } from './learning';
 export const DRAWING_SCORE = {
   /** Points par trait après rééchantillonnage. */
   samples: 32,
-  /** Écart moyen (par trait) jusqu'auquel un trait est jugé juste. */
-  goodDistance: 9,
-  /** Au-delà, le trait est jugé faux ; entre les deux, approximatif. */
+  /** Écart moyen (sur l'ensemble des traits) jusqu'auquel un tracé est jugé juste. */
+  goodDistance: 7,
+  /** Écart d'un trait au-delà duquel il est jugé faux (entre les deux : le tracé est « approximatif »). */
   fairDistance: 15,
   /** Un trait plus court ne permet pas de juger son sens (une inversion reste dans la tolérance). */
   minDirectionLength: 14,
@@ -31,7 +31,7 @@ export type DrawingIssue =
   | { type: 'shape'; stroke: number };
 
 export interface DrawingScore {
-  /** `good` : juste ; `fair` : bon ordre et bon sens, formes approximatives ; `wrong` : au moins une faute. */
+  /** `good` : juste ; `fair` : bon ordre et bon sens, formes approximatives (écart moyen au-dessus de goodDistance) ; `wrong` : au moins une faute. */
   verdict: DrawingVerdict;
   issues: DrawingIssue[];
   /** Traits de l'utilisateur fautifs (pour les signaler sur le dessin). */
@@ -147,7 +147,9 @@ export function scoreDrawing(user: readonly (readonly Point2D[])[], model: reado
   });
 
   const flagged = issues.flatMap((issue) => ('stroke' in issue ? [issue.stroke] : []));
-  const verdict: DrawingVerdict =
-    issues.length > 0 ? 'wrong' : Math.max(...distances) > DRAWING_SCORE.goodDistance ? 'fair' : 'good';
+  // « Juste » se juge sur l'écart moyen des traits (un kanji à 15 traits n'est pas « approximatif » pour un seul trait
+  // un peu faible) ; aucun trait ne dépasse de toute façon `fairDistance`, sinon il y a une faute.
+  const mean = distances.reduce((sum, d) => sum + d, 0) / distances.length;
+  const verdict: DrawingVerdict = issues.length > 0 ? 'wrong' : mean > DRAWING_SCORE.goodDistance ? 'fair' : 'good';
   return { verdict, issues, flagged, distances };
 }

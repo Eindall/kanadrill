@@ -1,8 +1,10 @@
 import { Component, computed, input, signal } from '@angular/core';
 import type { StrokeDto } from '@kanadrill/shared';
 
-/** Délai entre le début de deux traits consécutifs, en secondes (voir `--delay` dans le gabarit). */
-const STROKE_DELAY_S = 0.9;
+/** Durée visée de toute l'animation : un kanji de 20 traits ne doit pas durer une demi-minute. */
+const TARGET_TOTAL_S = 8;
+const MAX_STROKE_DELAY_S = 0.9;
+const MIN_STROKE_DELAY_S = 0.25;
 
 /**
  * Ordre des traits animé : les traits se dessinent un par un (technique du `stroke-dashoffset` avec
@@ -27,15 +29,15 @@ const STROKE_DELAY_S = 0.9;
           }
         </g>
         @for (run of runs(); track run.id) {
-          <g class="ink">
+          <g class="ink" [style.--duration]="delay() * 0.8 + 's'">
             @for (stroke of strokes(); track $index) {
-              <path [attr.d]="stroke.d" pathLength="1" [style.--delay]="$index * delay + 's'" />
+              <path [attr.d]="stroke.d" pathLength="1" [style.--delay]="$index * delay() + 's'" />
             }
           </g>
           @if (numbers()) {
             <g class="numbers">
               @for (stroke of strokes(); track $index) {
-                <text [attr.x]="stroke.n[0]" [attr.y]="stroke.n[1]" [style.--delay]="$index * delay + 's'">{{ $index + 1 }}</text>
+                <text [attr.x]="stroke.n[0]" [attr.y]="stroke.n[1]" [style.--delay]="$index * delay() + 's'">{{ $index + 1 }}</text>
               }
             </g>
           }
@@ -72,7 +74,7 @@ const STROKE_DELAY_S = 0.9;
       stroke: var(--color-ink);
       stroke-dasharray: 1;
       stroke-dashoffset: 1;
-      animation: draw 0.7s ease-in-out var(--delay) forwards;
+      animation: draw var(--duration, 0.7s) ease-in-out var(--delay) forwards;
     }
     .numbers text {
       font-size: 7px;
@@ -101,7 +103,10 @@ const STROKE_DELAY_S = 0.9;
 export class StrokeOrder {
   readonly strokes = input.required<StrokeDto[]>();
 
-  protected readonly delay = STROKE_DELAY_S;
+  /** Délai entre le début de deux traits : 0,9 s pour un kana, resserré pour un kanji à nombreux traits. */
+  protected readonly delay = computed(() =>
+    Math.min(MAX_STROKE_DELAY_S, Math.max(MIN_STROKE_DELAY_S, TARGET_TOTAL_S / Math.max(1, this.strokes().length))),
+  );
   protected readonly numbers = signal(true);
   /** Changer cette valeur recrée les traits : l'animation repart de zéro. */
   protected readonly runId = signal(0);

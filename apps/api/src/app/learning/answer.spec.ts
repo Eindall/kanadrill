@@ -58,8 +58,13 @@ describe('expectedAnswer', () => {
     expect(expectedAnswer('drawing', hi)).toBe('jour, soleil, Japon'); // un kanji se dessine d'après son sens
     expect(expectedAnswer('drawing', sa)).toBe('shi'); // un kana, d'après sa lecture
   });
-  it('limite les sens affichés et tolère un kanji sans lecture', () => {
+  it('limite les sens affichés, en nombre et en longueur, et tolère un kanji sans lecture', () => {
     expect(displayMeanings({ meanings: ['a', 'b', 'c', 'd'] }, 2)).toBe('a, b');
+    const child = ['enfant', 'signe de la 1ère branche terrestre', 'signe du Rat (zodiaque)'];
+    expect(displayMeanings({ meanings: child }, 3, 50)).toBe('enfant, signe de la 1ère branche terrestre'); // le 3e est trop long
+    expect(displayMeanings({ meanings: child })).toBe('enfant'); // limite par défaut (40) : le 2e dépasse déjà
+    expect(displayMeanings({ meanings: child }, 3, 5)).toBe('enfant'); // le premier est toujours gardé
+    expect(displayMeanings({ meanings: ['un sens vraiment très très très long, bien plus que la limite'] }, 3, 10)).toContain('très');
     expect(displayReadings({ on: [], kun: [] })).toBe('');
     expect(expectedAnswer('reading', { readings: [], meanings: ['x'], kanji: { on: [], kun: [] } })).toBe('');
   });

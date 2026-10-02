@@ -1,4 +1,4 @@
-import { adaptToDevice, availableModes, configFromParams, configToParams, DEFAULT_CONFIG, loadSavedConfig, saveConfig, validateConfig } from './session-config';
+import { adaptToDevice, availableModes, configFromParams, configToParams, DEFAULT_CONFIG, familiesWithoutMode, loadSavedConfig, reconcileModes, saveConfig, validateConfig } from './session-config';
 
 const params = (query: string) => new URLSearchParams(query);
 
@@ -15,11 +15,19 @@ describe('configFromParams', () => {
     'count=20&types=hiragana&modes=choice',
     'count=15&types=&modes=choice',
     'count=15&types=hiragana&modes=',
-    'count=15&types=kanji&modes=choice',
+    'count=15&types=romaji&modes=choice',
+    'count=15&types=kanji&modes=lire',
     'count=15&types=hiragana,emoji&modes=choice',
     'count=15&types=hiragana&modes=dessin',
   ])('refuse « %s »', (query) => {
     expect(configFromParams(params(query))).toBeNull();
+  });
+  it('accepte les kanji et leurs exercices', () => {
+    expect(configFromParams(params('count=30&types=hiragana,kanji&modes=choice,meaning,reading'))).toEqual({
+      count: 30,
+      types: ['hiragana', 'kanji'],
+      modes: ['choice', 'meaning', 'reading'],
+    });
   });
   it('accepte le tracé', () => {
     expect(configFromParams(params('count=15&types=hiragana&modes=choice,drawing'))?.modes).toEqual(['choice', 'drawing']);
@@ -65,8 +73,8 @@ describe('exercices selon l\'appareil', () => {
   const config = { count: 30, types: ['hiragana'], modes: ['typing', 'drawing'] } as const;
 
   it('propose le tracé seulement sur écran tactile', () => {
-    expect(availableModes(true)).toEqual(['choice', 'typing', 'drawing']);
-    expect(availableModes(false)).toEqual(['choice', 'typing']);
+    expect(availableModes(true)).toEqual(['choice', 'typing', 'drawing', 'meaning', 'reading']);
+    expect(availableModes(false)).toEqual(['choice', 'typing', 'meaning', 'reading']);
   });
   it('retire le tracé d\'un réglage mémorisé quand l\'appareil n\'est pas tactile', () => {
     expect(adaptToDevice({ ...config, types: [...config.types], modes: [...config.modes] }, false).modes).toEqual(['typing']);
@@ -74,5 +82,34 @@ describe('exercices selon l\'appareil', () => {
   });
   it('retombe sur le QCM si le tracé était le seul exercice', () => {
     expect(adaptToDevice({ count: 15, types: ['hiragana'], modes: ['drawing'] }, false).modes).toEqual(['choice']);
+  });
+});
+
+describe('reconcileModes', () => {
+  it('ajoute l\'exercice de base d\'une famille cochée qui n\'en a pas (sens pour les kanji, QCM pour les kana)', () => {
+    expect(reconcileModes(['hiragana', 'kanji'], ['choice'], false)).toEqual(['choice', 'meaning']);
+    expect(reconcileModes(['kanji'], ['typing'], false)).toEqual(['meaning']);
+    expect(reconcileModes(['hiragana'], ['reading'], false)).toEqual(['choice']);
+  });
+  it('retire les exercices d\'une famille décochée, sans toucher aux autres', () => {
+    expect(reconcileModes(['hiragana'], ['choice', 'typing', 'meaning', 'reading'], false)).toEqual(['choice', 'typing']);
+    expect(reconcileModes(['kanji'], ['choice', 'meaning', 'reading'], false)).toEqual(['meaning', 'reading']);
+  });
+  it('garde le tracé pour les deux familles, seulement sur écran tactile', () => {
+    expect(reconcileModes(['hiragana', 'kanji'], ['choice', 'meaning', 'drawing'], true)).toEqual(['choice', 'drawing', 'meaning']);
+    expect(reconcileModes(['kanji'], ['drawing'], false)).toEqual(['meaning']);
+    expect(reconcileModes(['kanji'], ['drawing'], true)).toEqual(['drawing']); // le tracé suffit à une famille
+  });
+  it('ne choisit rien sans type coché', () => {
+    expect(reconcileModes([], ['choice'], true)).toEqual([]);
+  });
+});
+
+describe('familiesWithoutMode', () => {
+  it('signale la famille cochée sans exercice (le tracé compte pour les deux)', () => {
+    expect(familiesWithoutMode(['hiragana', 'kanji'], ['choice'])).toEqual(['kanji']);
+    expect(familiesWithoutMode(['hiragana', 'kanji'], ['meaning'])).toEqual(['kana']);
+    expect(familiesWithoutMode(['hiragana', 'kanji'], ['drawing'])).toEqual([]);
+    expect(familiesWithoutMode(['kanji'], ['choice'])).toEqual(['kanji']);
   });
 });

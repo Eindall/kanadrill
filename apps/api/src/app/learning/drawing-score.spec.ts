@@ -1,5 +1,6 @@
 import { DRAWING_SCORE, flattenPath, polylineLength, resample, scoreDrawing, type Point2D, type StrokeDto } from '@kanadrill/shared';
 import { buildKanaSeeds } from './seed/seed-items';
+import { loadKanjiRecords } from './seed/kanji-seed';
 
 /** Générateur pseudo-aléatoire déterministe (mulberry32) : les tests ne changent pas d'une exécution à l'autre. */
 function rng(seed: number): () => number {
@@ -207,5 +208,76 @@ describe('scoreDrawing', () => {
   it('refuse un dessin vide', () => {
     const { strokes } = KANA[0].metadata;
     expect(scoreDrawing([], strokes).verdict).toBe('wrong');
+  });
+});
+
+describe('scoreDrawing sur les kanji (N5 à N3 : plus de traits, plus denses)', () => {
+  const KANJI = loadKanjiRecords().filter((kanji) => kanji.jlpt !== null && kanji.jlpt >= 3 && kanji.strokes.length > 0);
+  const longest = (strokes: readonly StrokeDto[]) => {
+    const lengths = strokes.map((stroke) => polylineLength(flattenPath(stroke.d)));
+    return lengths.indexOf(Math.max(...lengths));
+  };
+
+  it('couvre des centaines de kanji, avec plusieurs traits en moyenne', () => {
+    expect(KANJI.length).toBeGreaterThan(600);
+    expect(KANJI.reduce((sum, kanji) => sum + kanji.strokes.length, 0) / KANJI.length).toBeGreaterThan(6);
+  });
+
+  it('juge « juste » le modèle recopié, même redimensionné', () => {
+    const random = rng(21);
+    for (const kanji of KANJI) {
+      const verdict = scoreDrawing(userDrawing(kanji.strokes, random, { scale: 0.6 + random() * 0.5, dx: 8, dy: -6 }), kanji.strokes).verdict;
+      expect([kanji.c, verdict]).toEqual([kanji.c, 'good']);
+    }
+  });
+
+  it('accepte un tracé à main levée léger, refuse de moins en moins sévèrement un tracé brouillon', () => {
+    const random = rng(22);
+    let good = 0;
+    for (const kanji of KANJI) {
+      const light = scoreDrawing(userDrawing(kanji.strokes, random, { warp: 3, jitter: 1 }), kanji.strokes).verdict;
+      expect([kanji.c, light === 'wrong']).toEqual([kanji.c, false]);
+      if (light === 'good') good++;
+    }
+    expect(share(good, KANJI.length)).toBeGreaterThan(0.95);
+
+    const tally = { good: 0, fair: 0, wrong: 0 };
+    for (const kanji of KANJI) tally[scoreDrawing(userDrawing(kanji.strokes, random, { warp: 5, jitter: 1 }), kanji.strokes).verdict]++;
+    expect(share(tally.wrong, KANJI.length)).toBeLessThan(0.25); // sur un kanji dense, un seul trait trop loin suffit
+    expect(tally.fair).toBeGreaterThan(0);
+  });
+
+  it('refuse un trait inversé, des traits permutés ou manquants', () => {
+    const random = rng(23);
+    let misordered = 0;
+    let multi = 0;
+    for (const kanji of KANJI.filter((candidate) => candidate.strokes.length >= 2)) {
+      const { strokes } = kanji;
+      const reversed = scoreDrawing(userDrawing(strokes, random, { warp: 3, jitter: 1, reverse: [longest(strokes)] }), strokes);
+      expect([kanji.c, reversed.verdict]).toEqual([kanji.c, 'wrong']);
+      const order = strokes.map((_, i) => i);
+      [order[0], order[1]] = [order[1], order[0]];
+      multi++;
+      if (scoreDrawing(userDrawing(strokes, random, { warp: 3, jitter: 1, order }), strokes).verdict === 'wrong') misordered++;
+      expect(scoreDrawing(userDrawing(strokes.slice(1), random), strokes).issues[0]).toMatchObject({ type: 'strokeCount' });
+    }
+    // Deux traits voisins quasi identiques (ex. 費) peuvent s'échanger sans qu'on s'en aperçoive.
+    expect(share(misordered, multi)).toBeGreaterThan(0.99);
+  });
+
+  it('refuse presque toujours un autre kanji de même nombre de traits', () => {
+    const random = rng(24);
+    const sameCount = (strokes: readonly StrokeDto[]) => KANJI.filter((other) => other.strokes.length === strokes.length);
+    let total = 0;
+    let accepted = 0;
+    for (const target of KANJI) {
+      const candidates = sameCount(target.strokes).filter((other) => other !== target);
+      for (let attempt = 0; attempt < 3 && candidates.length > 0; attempt++) {
+        const other = candidates[Math.floor(random() * candidates.length)];
+        total++;
+        if (scoreDrawing(userDrawing(other.strokes, random, { warp: 3, jitter: 1, scale: 0.8 }), target.strokes).verdict !== 'wrong') accepted++;
+      }
+    }
+    expect(share(accepted, total)).toBeLessThan(0.01); // seules passent des paires quasi identiques (八 / 入, 牛 / 午)
   });
 });

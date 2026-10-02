@@ -5,7 +5,7 @@ import { pointsToPath, type Point } from './drawing-path';
 const SIZE = 109;
 /** Un point plus proche que ça du précédent n'est pas retenu (bruit du doigt). */
 const MIN_STEP = 0.4;
-const MAX_STROKES = 30;
+const MAX_STROKES = 40;
 const MAX_POINTS_PER_STROKE = 1500;
 
 /**

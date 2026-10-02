@@ -42,9 +42,18 @@ export function isAnswerCorrect(mode: ReviewMode, answer: string, item: Answerab
   }
 }
 
-/** Les sens à afficher comme bonne réponse (les premiers suffisent : KANJIDIC2 en donne parfois beaucoup). */
-export function displayMeanings(item: Pick<AnswerableItem, 'meanings'>, max = 3): string {
-  return item.meanings.slice(0, max).join(', ');
+/**
+ * Les premiers sens à afficher (KANJIDIC2 en donne parfois beaucoup, et de longs : « enfant, signe de la 1ère
+ * branche terrestre, signe du Rat (zodiaque) »). Au plus `max` sens, tant que le total reste sous `maxLength`
+ * caractères ; le premier est toujours gardé.
+ */
+export function displayMeanings(item: Pick<AnswerableItem, 'meanings'>, max = 3, maxLength = 40): string {
+  const kept: string[] = [];
+  for (const meaning of item.meanings.slice(0, max)) {
+    if (kept.length > 0 && [...kept, meaning].join(', ').length > maxLength) break;
+    kept.push(meaning);
+  }
+  return kept.join(', ');
 }
 
 /** Les lectures d'un kanji à afficher (on puis kun, en kana). */

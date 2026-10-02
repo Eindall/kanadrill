@@ -1,5 +1,8 @@
 import {
   DEFAULT_SESSION_SIZE,
+  KANA_MODES,
+  KANA_TYPES,
+  KANJI_MODES,
   REVIEW_MODES,
   SESSION_SIZES,
   SESSION_TYPES,
@@ -9,7 +12,13 @@ import {
   type SessionSize,
 } from '@kanadrill/shared';
 
-export const MODE_LABELS: Record<ReviewMode, string> = { choice: 'QCM', typing: 'Texte libre', drawing: 'Tracé au doigt' };
+export const MODE_LABELS: Record<ReviewMode, string> = {
+  choice: 'QCM de lecture',
+  typing: 'Saisie de la lecture',
+  meaning: 'Sens (QCM)',
+  reading: 'Lecture (romaji ou kana)',
+  drawing: 'Tracé au doigt',
+};
 export const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
 
 const STORAGE_KEY = 'kanadrill.sessionConfig';
@@ -47,10 +56,41 @@ export function availableModes(touch: boolean): readonly ReviewMode[] {
   return REVIEW_MODES.filter((mode) => touch || mode !== 'drawing');
 }
 
-/** Adapte un réglage (mémorisé, donc possiblement d'un autre usage) à l'appareil : sans tracé hors écran tactile. */
+const hasKana = (types: readonly ItemType[]): boolean => types.some((type) => KANA_TYPES.includes(type));
+const hasKanji = (types: readonly ItemType[]): boolean => types.includes('kanji');
+
+/**
+ * Exercices cohérents avec les types cochés : on retire ceux qui ne servent à aucun type coché (la saisie de kana
+ * sans kana, le sens de kanji sans kanji) et le tracé hors écran tactile, puis on ajoute l'exercice de base de
+ * chaque famille cochée qui n'en aurait plus (QCM pour les kana, sens pour les kanji). L'ordre est celui de
+ * `REVIEW_MODES`. Le tracé vaut pour les deux familles.
+ */
+export function reconcileModes(types: readonly ItemType[], modes: readonly ReviewMode[], touch: boolean): ReviewMode[] {
+  const kana = hasKana(types);
+  const kanji = hasKanji(types);
+  const wanted = new Set(
+    modes.filter(
+      (mode) =>
+        availableModes(touch).includes(mode) &&
+        ((kana && KANA_MODES.includes(mode)) || (kanji && KANJI_MODES.includes(mode))),
+    ),
+  );
+  if (kana && !KANA_MODES.some((mode) => wanted.has(mode))) wanted.add('choice');
+  if (kanji && !KANJI_MODES.some((mode) => wanted.has(mode))) wanted.add('meaning');
+  return REVIEW_MODES.filter((mode) => wanted.has(mode));
+}
+
+/** Familles cochées auxquelles il ne reste aucun exercice (le tracé compte pour les deux). */
+export function familiesWithoutMode(types: readonly ItemType[], modes: readonly ReviewMode[]): Array<'kana' | 'kanji'> {
+  const missing: Array<'kana' | 'kanji'> = [];
+  if (hasKana(types) && !modes.some((mode) => KANA_MODES.includes(mode))) missing.push('kana');
+  if (hasKanji(types) && !modes.some((mode) => KANJI_MODES.includes(mode))) missing.push('kanji');
+  return missing;
+}
+
+/** Adapte un réglage (mémorisé, donc possiblement d'un autre usage ou d'un autre appareil) à l'appareil. */
 export function adaptToDevice(config: SessionConfig, touch: boolean): SessionConfig {
-  const modes = config.modes.filter((mode) => availableModes(touch).includes(mode));
-  return { ...config, modes: modes.length > 0 ? modes : ['choice'] };
+  return { ...config, modes: reconcileModes(config.types, config.modes, touch) };
 }
 
 /** Dernier réglage utilisé (par appareil), ou le réglage par défaut. */

@@ -2,7 +2,17 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { DRAWING_ANSWERS, isAnswerCorrect, scoreDrawing, type DrawingScore, type SessionConfig } from '@kanadrill/shared';
+import {
+  displayMeanings,
+  displayReadings,
+  DRAWING_ANSWERS,
+  expectedAnswer,
+  isAnswerCorrect,
+  scoreDrawing,
+  type DrawingScore,
+  type ItemDto,
+  type SessionConfig,
+} from '@kanadrill/shared';
 import { ReviewService } from '../../core/review.service';
 import { describeScore, suggestedAnswer, VERDICT_TITLES, type DrawingAnswer } from './drawing-feedback';
 import { DrawingPad } from './drawing-pad';
@@ -140,19 +150,39 @@ interface Feedback {
                 }
               </p>
               @if (current.mode === 'drawing') {
-                <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ current.item.readings[0] }}</p>
+                @if (current.item.kanji; as kanji) {
+                  <!-- Un kanji se dessine d'après son sens (et ses lectures, en aide). -->
+                  <p class="text-center text-4xl font-semibold leading-tight sm:text-5xl">{{ meanings(current.item, 28) }}</p>
+                  @if (kanjiReadings(current.item); as hint) {
+                    <p class="text-center text-sm text-ink-soft" lang="ja">{{ hint }}</p>
+                  }
+                } @else {
+                  <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ current.item.readings[0] }}</p>
+                }
                 @if (phase() === 'question') {
-                  <p class="text-sm text-ink-soft">Dessine ce kana avec le doigt, trait par trait.</p>
+                  <p class="text-sm text-ink-soft">
+                    Dessine ce {{ current.item.kanji ? 'kanji' : 'kana' }} avec le doigt, trait par trait.
+                  </p>
                 } @else {
                   <p class="font-kana text-5xl leading-none" lang="ja">{{ current.item.character }}</p>
                 }
               } @else {
                 <p class="font-kana text-[7rem] leading-none sm:text-[9rem]" lang="ja">{{ current.item.character }}</p>
+                @if (current.item.kanji) {
+                  <p class="text-sm text-ink-soft">
+                    {{ current.mode === 'meaning' ? 'Quel est son sens ?' : 'Quelle est sa lecture ?' }}
+                  </p>
+                }
               }
             </div>
 
-            @if (current.mode === 'choice') {
-              <div class="grid grid-cols-2 gap-3" role="group" aria-label="Quelle est la lecture ?">
+            @if (current.mode === 'choice' || current.mode === 'meaning') {
+              <div
+                class="grid gap-3"
+                [class]="current.mode === 'meaning' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2'"
+                role="group"
+                [attr.aria-label]="current.mode === 'meaning' ? 'Quel est le sens ?' : 'Quelle est la lecture ?'"
+              >
                 @for (choice of current.choices; track choice; let i = $index) {
                   <button
                     type="button"
@@ -164,14 +194,14 @@ interface Feedback {
                   </button>
                 }
               </div>
-            } @else if (current.mode === 'typing') {
+            } @else if (current.mode === 'typing' || current.mode === 'reading') {
               @if (phase() === 'question') {
                 <form class="flex flex-col gap-3 sm:flex-row" (submit)="submitTyped($event)">
                   <input
                     #answerInput
                     type="text"
-                    aria-label="Lecture en romaji"
-                    placeholder="Lecture en romaji"
+                    [attr.aria-label]="current.mode === 'reading' ? 'Lecture en romaji ou en kana' : 'Lecture en romaji'"
+                    [placeholder]="current.mode === 'reading' ? 'Lecture (romaji ou kana)' : 'Lecture en romaji'"
                     autocomplete="off"
                     autocapitalize="none"
                     autocorrect="off"
@@ -233,7 +263,7 @@ interface Feedback {
                   Suivant
                 </button>
                 <div class="flex flex-col gap-2">
-                  <p class="text-center text-sm text-ink-soft">Pas d'accord avec le verdict ? Compte-le plutôt comme :</p>
+                  <p class="text-center text-sm text-ink-soft">Pas d'accord ? Compte-le plutôt comme :</p>
                   <div class="grid grid-cols-2 gap-3">
                     @for (option of otherOptions(); track option.answer) {
                       <button type="button" (click)="answer(option.answer)" [class]="drawingButtonClass(option.answer)">
@@ -262,12 +292,19 @@ interface Feedback {
                   </p>
                   @if (!f.correct) {
                     <p>
-                      C'était «&nbsp;<strong>{{ f.expected }}</strong>&nbsp;»@if (current.mode === 'typing') {
+                      C'était «&nbsp;<strong>{{ f.expected }}</strong>&nbsp;»@if (current.mode === 'typing' || current.mode === 'reading') {
                         <span class="text-ink-soft"> (tu as écrit «&nbsp;{{ f.answer }}&nbsp;»)</span>
                       }.
                     </p>
-                  } @else if (current.item.readings.length > 1 && f.answer.trim().toLowerCase() !== f.expected) {
+                  } @else if (!current.item.kanji && current.item.readings.length > 1 && f.answer.trim().toLowerCase() !== f.expected) {
                     <p class="text-sm text-ink-soft">Lecture de référence : {{ f.expected }}</p>
+                  }
+                  @if (current.item.kanji; as kanji) {
+                    <!-- Récapitulatif du kanji, pour apprendre même quand on a juste. -->
+                    <p class="text-sm text-ink-soft">
+                      <span class="font-kana text-lg text-ink" lang="ja">{{ current.item.character }}</span>
+                      · {{ meanings(current.item) }} · <span lang="ja">{{ allReadings(current.item) }}</span>
+                    </p>
                   }
                   @if (f.saveError) {
                     <p role="alert" class="text-sm text-seal">Ta réponse n'a pas pu être enregistrée.</p>
@@ -373,6 +410,19 @@ export class ReviewPage {
     }
   }
 
+  protected meanings(item: ItemDto, maxLength = 40): string {
+    return displayMeanings(item, 3, maxLength);
+  }
+
+  /** Quelques lectures pour guider le tracé d'un kanji (les premières on puis kun). */
+  protected kanjiReadings(item: ItemDto): string {
+    return item.kanji ? [...item.kanji.on.slice(0, 2), ...item.kanji.kun.slice(0, 2)].join(' · ') : '';
+  }
+
+  protected allReadings(item: ItemDto): string {
+    return item.kanji ? displayReadings(item.kanji) : '';
+  }
+
   protected typeLabel(type: keyof typeof TYPE_LABELS): string {
     return TYPE_LABELS[type];
   }
@@ -391,7 +441,8 @@ export class ReviewPage {
   }
 
   protected choiceClass(choice: string): string {
-    const base = 'min-h-16 border px-4 py-3 text-2xl transition-colors disabled:cursor-default ';
+    const size = this.card()?.mode === 'meaning' ? 'text-lg' : 'text-2xl';
+    const base = `min-h-16 border px-4 py-3 ${size} transition-colors disabled:cursor-default `;
     const f = this.feedback();
     if (!f) return base + 'border-line bg-paper hover:border-ink';
     if (choice === f.expected) return base + 'border-ok bg-ok/10 font-semibold text-ok';
@@ -402,7 +453,7 @@ export class ReviewPage {
   protected onKeydown(event: KeyboardEvent): void {
     // Raccourcis 1–4 pour le QCM (clavier physique).
     const card = this.card();
-    if (this.phase() !== 'question' || card?.mode !== 'choice' || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.phase() !== 'question' || (card?.mode !== 'choice' && card?.mode !== 'meaning') || event.ctrlKey || event.metaKey || event.altKey) return;
     const choice = card.choices?.[Number(event.key) - 1];
     if (choice !== undefined) void this.answer(choice);
   }
@@ -430,8 +481,8 @@ export class ReviewPage {
 
     // Retour immédiat avec la même logique que le serveur ; la réponse du serveur fait foi ensuite.
     this.feedback.set({
-      correct: isAnswerCorrect(card.mode, text, card.item.readings),
-      expected: card.item.readings[0],
+      correct: isAnswerCorrect(card.mode, text, card.item),
+      expected: expectedAnswer(card.mode, card.item),
       answer: text,
       saving: true,
       saveError: false,
