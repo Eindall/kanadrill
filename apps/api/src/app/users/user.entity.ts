@@ -29,6 +29,10 @@ export class User {
   @Column({ name: 'daily_goal', type: 'smallint', default: 30 })
   dailyGoal!: number;
 
+  /** Apparaît dans le classement des autres utilisateurs (pseudo, avatar et séries). Désactivable dans le profil. */
+  @Column({ name: 'leaderboard_visible', type: 'boolean', default: true })
+  leaderboardVisible!: boolean;
+
   @OneToMany(() => AuthIdentity, (identity) => identity.user)
   identities!: AuthIdentity[];
 

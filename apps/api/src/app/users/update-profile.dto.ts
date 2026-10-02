@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
 import {
   MAX_DAILY_GOAL,
   MIN_DAILY_GOAL,
@@ -24,4 +24,8 @@ export class UpdateProfileDto implements UpdateProfileRequest {
   @Min(MIN_DAILY_GOAL)
   @Max(MAX_DAILY_GOAL)
   dailyGoal?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  leaderboardVisible?: boolean;
 }

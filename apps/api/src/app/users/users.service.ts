@@ -67,6 +67,7 @@ export class UsersService {
     const user = await this.findOneOrFail(id);
     if (patch.username !== undefined) user.username = patch.username;
     if (patch.dailyGoal !== undefined) user.dailyGoal = patch.dailyGoal;
+    if (patch.leaderboardVisible !== undefined) user.leaderboardVisible = patch.leaderboardVisible;
     await this.users.save(user);
     return user;
   }
@@ -82,6 +83,7 @@ export class UsersService {
       username: user.username,
       avatarUrl: user.avatarUrl,
       dailyGoal: user.dailyGoal,
+      leaderboardVisible: user.leaderboardVisible,
       createdAt: user.createdAt.toISOString(),
       identities: (user.identities ?? []).map((identity) => ({
         provider: identity.provider,

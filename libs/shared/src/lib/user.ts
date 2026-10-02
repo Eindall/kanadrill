@@ -15,9 +15,12 @@ export interface UserDto {
   identities: AuthIdentityDto[];
   /** Objectif quotidien : nombre de cartes à tenter par jour. */
   dailyGoal: number;
+  /** Visible dans le classement des autres utilisateurs. */
+  leaderboardVisible: boolean;
 }
 
 export interface UpdateProfileRequest {
   username?: string;
   dailyGoal?: number;
+  leaderboardVisible?: boolean;
 }
