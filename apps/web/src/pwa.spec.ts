@@ -56,6 +56,28 @@ describe('index.html', () => {
   });
 });
 
+describe('favicon', () => {
+  it('est un ICO avec les tailles 16, 32 et 48 (images PNG valides)', () => {
+    const ico = read('../public/favicon.ico');
+    expect([ico.readUInt16LE(0), ico.readUInt16LE(2)]).toEqual([0, 1]); // en-tête ICO
+    const count = ico.readUInt16LE(4);
+    const sizes: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const entry = 6 + 16 * i;
+      const size = ico.readUInt8(entry) || 256;
+      const length = ico.readUInt32LE(entry + 8);
+      const offset = ico.readUInt32LE(entry + 12);
+      expect(pngSize(ico.subarray(offset, offset + length))).toBe(`${size}x${size}`);
+      sizes.push(size);
+    }
+    expect(sizes.sort((x, y) => x - y)).toEqual([16, 32, 48]);
+  });
+
+  it('est déclaré dans index.html', () => {
+    expect(readText('./index.html')).toContain('<link rel="icon" type="image/x-icon" href="favicon.ico"');
+  });
+});
+
 describe('ngsw-config.json', () => {
   const config = JSON.parse(readText('../ngsw-config.json')) as {
     navigationUrls: string[];

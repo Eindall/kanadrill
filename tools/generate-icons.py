@@ -2,10 +2,14 @@
 """Génère les icônes de l'application (PWA) dans apps/web/public/icons.
 
 Un « か » clair sur fond encre, avec un point rouge sceau en bas à droite (jamais en haut à droite : il se lirait comme un dakuten, « が ») (couleurs de apps/web/src/styles.css).
-Les PNG sont commités : ce script ne sert qu'à les régénérer (Pillow + une police japonaise, ici Noto Sans CJK JP).
+Génère aussi le favicon (apps/web/public/favicon.ico) : le « あ » de la page de connexion, dans son carré blanc à
+bordure encre, avec le petit tampon rouge en coin.
+Les fichiers générés sont commités : ce script ne sert qu'à les régénérer (Pillow + une police japonaise, ici Noto Sans CJK JP).
 
     python3 tools/generate-icons.py [chemin/vers/NotoSansCJK-Regular.ttc]
 """
+import io
+import struct
 import sys
 from pathlib import Path
 
@@ -45,3 +49,49 @@ save(standard, 'icon-192.png', 192)
 save(standard, 'icon-512.png', 512)
 save(maskable, 'icon-maskable-512.png', 512)
 save(standard, 'apple-touch-icon.png', 180)
+
+
+# --- Favicon : le motif de la page de connexion (login-page.ts), lisible dès 16 px ---
+SERIF = '/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc'  # gras : les pleins et déliés fins disparaîtraient à 16 px
+PUBLIC = OUT.parent
+
+
+def render_favicon() -> Image.Image:
+    border = int(MASTER * 0.06)
+    image = Image.new('RGB', (MASTER, MASTER), INK)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((border, border, MASTER - border - 1, MASTER - border - 1), fill=PAPER)
+
+    font = ImageFont.truetype(SERIF, int(MASTER * 0.78), index=0)
+    left, top, right, bottom = draw.textbbox((0, 0), 'あ', font=font)
+    # Un peu décalé vers le haut à gauche pour laisser sa place au tampon.
+    x = (MASTER - (right - left)) / 2 - left - MASTER * 0.05
+    y = (MASTER - (bottom - top)) / 2 - top - MASTER * 0.06
+    draw.text((x, y), 'あ', font=font, fill=INK)
+
+    # Tampon rouge incliné de 5°, dans le coin bas droit, comme sur la page de connexion.
+    stamp_size = int(MASTER * 0.27)
+    stamp = Image.new('RGBA', (stamp_size, stamp_size), SEAL)
+    stamp = stamp.rotate(5, resample=Image.BICUBIC, expand=True)
+    image.paste(stamp, (MASTER - border - stamp.width + int(MASTER * 0.02), MASTER - border - stamp.height + int(MASTER * 0.02)), stamp)
+    return image
+
+
+def write_ico(path: Path, image: Image.Image, sizes: tuple[int, ...]) -> None:
+    """ICO à images PNG intégrées, chaque taille réduite depuis le grand format (meilleur rendu que le redimensionnement de Pillow)."""
+    blobs = []
+    for size in sizes:
+        buffer = io.BytesIO()
+        image.resize((size, size), Image.LANCZOS).save(buffer, format='PNG', optimize=True)
+        blobs.append(buffer.getvalue())
+    header = struct.pack('<HHH', 0, 1, len(sizes))
+    offset = 6 + 16 * len(sizes)
+    entries = b''
+    for size, blob in zip(sizes, blobs):
+        entries += struct.pack('<BBBBHHII', size, size, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+    path.write_bytes(header + entries + b''.join(blobs))
+    print(f'{path.name} ({", ".join(f"{s}x{s}" for s in sizes)}, {path.stat().st_size} octets)')
+
+
+write_ico(PUBLIC / 'favicon.ico', render_favicon(), (16, 32, 48))
