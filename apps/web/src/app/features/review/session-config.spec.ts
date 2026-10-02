@@ -73,8 +73,8 @@ describe('exercices selon l\'appareil', () => {
   const config = { count: 30, types: ['hiragana'], modes: ['typing', 'drawing'] } as const;
 
   it('propose le tracé seulement sur écran tactile', () => {
-    expect(availableModes(true)).toEqual(['choice', 'typing', 'drawing', 'meaning', 'reading', 'reverse']);
-    expect(availableModes(false)).toEqual(['choice', 'typing', 'meaning', 'reading', 'reverse']);
+    expect(availableModes(true)).toEqual(['choice', 'typing', 'drawing', 'meaning', 'reading', 'reverse', 'kanjiReverse']);
+    expect(availableModes(false)).toEqual(['choice', 'typing', 'meaning', 'reading', 'reverse', 'kanjiReverse']);
   });
   it('retire le tracé d\'un réglage mémorisé quand l\'appareil n\'est pas tactile', () => {
     expect(adaptToDevice({ ...config, types: [...config.types], modes: [...config.modes] }, false).modes).toEqual(['typing']);
@@ -100,10 +100,11 @@ describe('reconcileModes', () => {
     expect(reconcileModes(['kanji'], ['drawing'], false)).toEqual(['meaning']);
     expect(reconcileModes(['kanji'], ['drawing'], true)).toEqual(['drawing']); // le tracé suffit à une famille
   });
-  it('garde le QCM inversé pour les deux familles, sur tout appareil, et il suffit à une famille', () => {
-    expect(reconcileModes(['hiragana', 'kanji'], ['reverse'], false)).toEqual(['reverse']);
-    expect(reconcileModes(['kanji'], ['choice', 'reverse'], false)).toEqual(['reverse']);
-    expect(reconcileModes(['hiragana'], ['meaning', 'reverse'], false)).toEqual(['reverse']);
+  it('chaque famille a son QCM inversé, sur tout appareil, et il suffit à sa famille', () => {
+    expect(reconcileModes(['hiragana', 'kanji'], ['reverse', 'kanjiReverse'], false)).toEqual(['reverse', 'kanjiReverse']);
+    expect(reconcileModes(['hiragana'], ['reverse', 'kanjiReverse'], false)).toEqual(['reverse']); // pas de kanji : pas son QCM inversé
+    expect(reconcileModes(['kanji'], ['reverse', 'kanjiReverse'], false)).toEqual(['kanjiReverse']);
+    expect(reconcileModes(['hiragana', 'kanji'], ['reverse'], false)).toEqual(['meaning', 'reverse']); // il manque un exercice aux kanji (ordre de REVIEW_MODES)
   });
   it('ne choisit rien sans type coché', () => {
     expect(reconcileModes([], ['choice'], true)).toEqual([]);
@@ -116,6 +117,7 @@ describe('familiesWithoutMode', () => {
     expect(familiesWithoutMode(['hiragana', 'kanji'], ['meaning'])).toEqual(['kana']);
     expect(familiesWithoutMode(['hiragana', 'kanji'], ['drawing'])).toEqual([]);
     expect(familiesWithoutMode(['kanji'], ['choice'])).toEqual(['kanji']);
-    expect(familiesWithoutMode(['hiragana', 'kanji'], ['reverse'])).toEqual([]);
+    expect(familiesWithoutMode(['hiragana', 'kanji'], ['reverse'])).toEqual(['kanji']);
+    expect(familiesWithoutMode(['hiragana', 'kanji'], ['reverse', 'kanjiReverse'])).toEqual([]);
   });
 });

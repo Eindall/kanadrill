@@ -42,9 +42,9 @@ describe('isAnswerCorrect', () => {
     expect(isReadingCorrect('しょう', ['shou', 'sho'])).toBe(true);
   });
 
-  it('QCM inversé : la réponse est le caractère choisi', () => {
-    expect(isAnswerCorrect('reverse', '日', hi)).toBe(true);
-    expect(isAnswerCorrect('reverse', '月', hi)).toBe(false);
+  it('QCM inversés : la réponse est le caractère choisi', () => {
+    expect(isAnswerCorrect('kanjiReverse', '日', hi)).toBe(true);
+    expect(isAnswerCorrect('kanjiReverse', '月', hi)).toBe(false);
     expect(isAnswerCorrect('reverse', 'あ', a)).toBe(true);
     expect(isAnswerCorrect('reverse', 'ア', a)).toBe(false); // katakana ≠ hiragana
     expect(isAnswerCorrect('reverse', '日', { readings: [], meanings: [] })).toBe(false); // caractère inconnu
@@ -66,7 +66,7 @@ describe('expectedAnswer', () => {
     expect(expectedAnswer('reading', hi)).toBe('ニチ, ジツ, ひ, -び, -か');
     expect(expectedAnswer('drawing', hi)).toBe('jour, soleil, Japon'); // un kanji se dessine d'après son sens
     expect(expectedAnswer('drawing', sa)).toBe('shi'); // un kana, d'après sa lecture
-    expect(expectedAnswer('reverse', hi)).toBe('日'); // à l'envers, la bonne réponse est le caractère
+    expect(expectedAnswer('kanjiReverse', hi)).toBe('日'); // à l'envers, la bonne réponse est le caractère
     expect(expectedAnswer('reverse', a)).toBe('あ');
   });
   it('limite les sens affichés, en nombre et en longueur, et tolère un kanji sans lecture', () => {

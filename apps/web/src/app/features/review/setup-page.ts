@@ -16,6 +16,7 @@ import {
   configToParams,
   familiesWithoutMode,
   loadSavedConfig,
+  MODE_HINTS,
   MODE_LABELS,
   reconcileModes,
   saveConfig,
@@ -95,7 +96,12 @@ const OPTION =
             @for (mode of kanaModes; track mode) {
               <label [class]="option">
                 <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes(mode)" (change)="toggleMode(mode)" />
-                <span class="font-medium">{{ modeLabels[mode] }}</span>
+                <span class="flex flex-col">
+                  <span class="font-medium">{{ modeLabels[mode] }}</span>
+                  @if (modeHints[mode]; as hint) {
+                    <span class="text-sm text-ink-soft">{{ hint }}</span>
+                  }
+                </span>
               </label>
             }
           </div>
@@ -107,31 +113,27 @@ const OPTION =
             @for (mode of kanjiModes; track mode) {
               <label [class]="option">
                 <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes(mode)" (change)="toggleMode(mode)" />
-                <span class="font-medium">{{ modeLabels[mode] }}</span>
+                <span class="flex flex-col">
+                  <span class="font-medium">{{ modeLabels[mode] }}</span>
+                  @if (modeHints[mode]; as hint) {
+                    <span class="text-sm text-ink-soft">{{ hint }}</span>
+                  }
+                </span>
               </label>
             }
           </div>
         }
 
-        @if (showKana() || showKanji()) {
-          <div class="flex flex-col gap-3" role="group" aria-labelledby="modes-common">
-            <h2 id="modes-common" class="text-sm font-medium uppercase tracking-wide text-ink-soft">Kana et kanji</h2>
+        @if (touch && (showKana() || showKanji())) {
+          <div class="flex flex-col gap-3" role="group" aria-labelledby="modes-drawing">
+            <h2 id="modes-drawing" class="text-sm font-medium uppercase tracking-wide text-ink-soft">Écriture</h2>
             <label [class]="option">
-              <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes('reverse')" (change)="toggleMode('reverse')" />
+              <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes('drawing')" (change)="toggleMode('drawing')" />
               <span class="flex flex-col">
-                <span class="font-medium">{{ modeLabels.reverse }}</span>
-                <span class="text-sm text-ink-soft">On voit la lecture d'un kana ou le sens d'un kanji : retrouve le bon caractère.</span>
+                <span class="font-medium">{{ modeLabels.drawing }}</span>
+                <span class="text-sm text-ink-soft">{{ modeHints.drawing }}</span>
               </span>
             </label>
-            @if (touch) {
-              <label [class]="option">
-                <input type="checkbox" class="size-5 accent-ink" [checked]="selectedModes().includes('drawing')" (change)="toggleMode('drawing')" />
-                <span class="flex flex-col">
-                  <span class="font-medium">{{ modeLabels.drawing }}</span>
-                  <span class="text-sm text-ink-soft">Dessine le caractère, puis compare-le au modèle.</span>
-                </span>
-              </label>
-            }
           </div>
         }
       </fieldset>
@@ -170,8 +172,9 @@ export class SetupPage {
   protected readonly types = SESSION_TYPES;
   protected readonly typeLabels = TYPE_LABELS;
   protected readonly modeLabels = MODE_LABELS;
-  protected readonly kanaModes: readonly ReviewMode[] = ['choice', 'typing'];
-  protected readonly kanjiModes: readonly ReviewMode[] = ['meaning', 'reading'];
+  protected readonly modeHints = MODE_HINTS;
+  protected readonly kanaModes: readonly ReviewMode[] = ['choice', 'typing', 'reverse'];
+  protected readonly kanjiModes: readonly ReviewMode[] = ['meaning', 'reading', 'kanjiReverse'];
   /** Le tracé n'est proposé que sur écran tactile. */
   protected readonly touch = isTouchDevice();
 

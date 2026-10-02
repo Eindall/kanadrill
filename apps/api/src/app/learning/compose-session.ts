@@ -84,7 +84,7 @@ export function modesFor(modes: readonly ReviewMode[], card: ModeSupport): Revie
     if (mode === 'drawing') return card.hasStrokes;
     if (mode === 'reading') return card.hasReadings;
     if (mode === 'meaning') return card.hasMeanings;
-    if (mode === 'reverse') return !isKanjiType(card.type) || card.hasMeanings; // un kanji se retrouve par son sens
+    if (mode === 'kanjiReverse') return card.hasMeanings; // un kanji se retrouve par son sens
     return true;
   });
   return possible.length > 0 ? possible : [isKanjiType(card.type) ? 'meaning' : 'choice'];

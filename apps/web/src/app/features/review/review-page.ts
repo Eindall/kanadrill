@@ -8,6 +8,7 @@ import {
   DRAWING_ANSWERS,
   expectedAnswer,
   isAnswerCorrect,
+  isReverseMode,
   scoreDrawing,
   type DrawingScore,
   type ItemDto,
@@ -166,7 +167,7 @@ interface Feedback {
                 } @else {
                   <p class="font-kana text-5xl leading-none" lang="ja">{{ current.item.character }}</p>
                 }
-              } @else if (current.mode === 'reverse') {
+              } @else if (isReverse(current.mode)) {
                 <!-- QCM inversé : on voit la lecture (kana) ou le sens (kanji), on retrouve le caractère. -->
                 @if (current.item.kanji) {
                   <p class="text-center text-4xl font-semibold leading-tight sm:text-5xl">{{ meanings(current.item, 28) }}</p>
@@ -185,13 +186,13 @@ interface Feedback {
               }
             </div>
 
-            @if (current.mode === 'choice' || current.mode === 'meaning' || current.mode === 'reverse') {
+            @if (current.mode === 'choice' || current.mode === 'meaning' || isReverse(current.mode)) {
               <div
                 class="grid gap-3"
                 [class]="current.mode === 'meaning' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2'"
                 role="group"
                 [attr.aria-label]="
-                  current.mode === 'meaning' ? 'Quel est le sens ?' : current.mode === 'reverse' ? 'Quel est le bon caractère ?' : 'Quelle est la lecture ?'
+                  current.mode === 'meaning' ? 'Quel est le sens ?' : isReverse(current.mode) ? 'Quel est le bon caractère ?' : 'Quelle est la lecture ?'
                 "
               >
                 @for (choice of current.choices; track choice; let i = $index) {
@@ -202,7 +203,7 @@ interface Feedback {
                     [class]="choiceClass(choice)"
                   >
                     <span class="mr-2 text-xs text-ink-soft max-sm:hidden" aria-hidden="true">{{ i + 1 }}</span
-                    ><span [attr.lang]="current.mode === 'reverse' ? 'ja' : null">{{ choice }}</span>
+                    ><span [attr.lang]="isReverse(current.mode) ? 'ja' : null">{{ choice }}</span>
                   </button>
                 }
               </div>
@@ -427,6 +428,8 @@ export class ReviewPage {
     }
   }
 
+  protected readonly isReverse = isReverseMode;
+
   protected meanings(item: ItemDto, maxLength = 40): string {
     return displayMeanings(item, 3, maxLength);
   }
@@ -460,7 +463,7 @@ export class ReviewPage {
   protected choiceClass(choice: string): string {
     const mode = this.card()?.mode;
     // Les caractères du QCM inversé sont grands et en police japonaise ; les sens (longs) plus petits.
-    const size = mode === 'meaning' ? 'text-lg min-h-16' : mode === 'reverse' ? 'font-kana text-5xl min-h-24' : 'text-2xl min-h-16';
+    const size = mode === 'meaning' ? 'text-lg min-h-16' : mode && isReverseMode(mode) ? 'font-kana text-5xl min-h-24' : 'text-2xl min-h-16';
     const base = `border px-4 py-3 ${size} transition-colors disabled:cursor-default `;
     const f = this.feedback();
     if (!f) return base + 'border-line bg-paper hover:border-ink';
@@ -472,7 +475,7 @@ export class ReviewPage {
   protected onKeydown(event: KeyboardEvent): void {
     // Raccourcis 1–4 pour le QCM (clavier physique).
     const card = this.card();
-    if (this.phase() !== 'question' || (card?.mode !== 'choice' && card?.mode !== 'meaning' && card?.mode !== 'reverse') || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.phase() !== 'question' || (card?.mode !== 'choice' && card?.mode !== 'meaning' && !(card && isReverseMode(card.mode))) || event.ctrlKey || event.metaKey || event.altKey) return;
     const choice = card.choices?.[Number(event.key) - 1];
     if (choice !== undefined) void this.answer(choice);
   }

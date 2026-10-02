@@ -19,6 +19,14 @@ export const MODE_LABELS: Record<ReviewMode, string> = {
   reading: 'Lecture (romaji ou kana)',
   drawing: 'Tracé au doigt',
   reverse: 'QCM inversé',
+  kanjiReverse: 'QCM inversé',
+};
+
+/** Précision affichée sous un exercice : ce qu'on voit et ce qu'on doit trouver. */
+export const MODE_HINTS: Partial<Record<ReviewMode, string>> = {
+  reverse: 'On voit la lecture : retrouve le bon kana parmi quatre.',
+  kanjiReverse: 'On voit le sens : retrouve le bon kanji parmi quatre.',
+  drawing: 'Dessine le caractère, puis compare-le au modèle (kana et kanji cochés).',
 };
 export const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
 

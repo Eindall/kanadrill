@@ -21,8 +21,6 @@ export function gradeAnswer(input: {
   mode: ReviewMode;
   durationMs: number;
   answer?: string;
-  /** L'élément est un kanji (les seuils des QCM sont plus larges). */
-  kanji?: boolean;
 }): ReviewRating {
   const { mode, durationMs } = input;
   if (!input.correct) return REVIEW_RATING.Again;
@@ -32,8 +30,8 @@ export function gradeAnswer(input: {
       return input.answer === DRAWING_ANSWERS.fair || durationMs > SLOW_DRAWING_MS ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
     case 'meaning':
       return durationMs > SLOW_MEANING_MS ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
-    case 'reverse': // QCM : jamais Easy ; un kanji se retrouve moins vite qu'un kana
-      return durationMs > (input.kanji ? SLOW_MEANING_MS : SLOW_ANSWER_MS) ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
+    case 'kanjiReverse': // QCM : jamais Easy ; retrouver un kanji prend autant de temps que le sens
+      return durationMs > SLOW_MEANING_MS ? REVIEW_RATING.Hard : REVIEW_RATING.Good;
     case 'reading':
       if (durationMs > SLOW_READING_MS) return REVIEW_RATING.Hard;
       return durationMs < FAST_READING_MS ? REVIEW_RATING.Easy : REVIEW_RATING.Good;

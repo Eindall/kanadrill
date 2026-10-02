@@ -38,12 +38,13 @@ describe('gradeAnswer', () => {
     expect(grade(true, 'reading', FAST_READING_MS)).toBe(REVIEW_RATING.Good);
     expect(grade(true, 'reading', SLOW_READING_MS + 1)).toBe(REVIEW_RATING.Hard);
   });
-  it('note le QCM inversé comme un QCM (jamais Easy), plus large pour un kanji', () => {
-    expect(gradeAnswer({ correct: false, mode: 'reverse', durationMs: 500 })).toBe(REVIEW_RATING.Again);
-    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: 500 })).toBe(REVIEW_RATING.Good);
-    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: SLOW_ANSWER_MS + 1 })).toBe(REVIEW_RATING.Hard); // kana
-    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: SLOW_ANSWER_MS + 1, kanji: true })).toBe(REVIEW_RATING.Good);
-    expect(gradeAnswer({ correct: true, mode: 'reverse', durationMs: SLOW_MEANING_MS + 1, kanji: true })).toBe(REVIEW_RATING.Hard);
+  it('note les QCM inversés comme des QCM (jamais Easy), plus large pour un kanji', () => {
+    expect(grade(false, 'reverse', 500)).toBe(REVIEW_RATING.Again);
+    expect(grade(true, 'reverse', 500)).toBe(REVIEW_RATING.Good);
+    expect(grade(true, 'reverse', SLOW_ANSWER_MS + 1)).toBe(REVIEW_RATING.Hard); // kana
+    expect(grade(false, 'kanjiReverse', 500)).toBe(REVIEW_RATING.Again);
+    expect(grade(true, 'kanjiReverse', SLOW_ANSWER_MS + 1)).toBe(REVIEW_RATING.Good); // lent pour un kana, normal pour un kanji
+    expect(grade(true, 'kanjiReverse', SLOW_MEANING_MS + 1)).toBe(REVIEW_RATING.Hard);
   });
   it('ne note Easy qu\'une saisie rapide, jamais un QCM', () => {
     expect(grade(true, 'typing', FAST_TYPING_MS - 1)).toBe(REVIEW_RATING.Easy);
@@ -89,11 +90,13 @@ describe('modesFor', () => {
     expect(modesFor(['typing', 'drawing'], { ...kana, hasStrokes: false })).toEqual(['typing']);
     expect(modesFor(['meaning', 'reading', 'drawing'], { ...kanji, hasStrokes: false, hasReadings: false })).toEqual(['meaning']);
   });
-  it('propose le QCM inversé aux deux familles (un kanji se retrouve par son sens)', () => {
-    expect(modesFor(['reverse'], kana)).toEqual(['reverse']);
-    expect(modesFor(['reverse'], kanji)).toEqual(['reverse']);
+  it('chaque famille a son QCM inversé : un kana ne reçoit pas celui des kanji, et inversement', () => {
+    expect(modesFor(['reverse', 'kanjiReverse'], kana)).toEqual(['reverse']);
+    expect(modesFor(['reverse', 'kanjiReverse'], kanji)).toEqual(['kanjiReverse']);
     expect(modesFor(['reverse', 'choice'], kana)).toEqual(['reverse', 'choice']);
-    expect(modesFor(['reverse'], { ...kanji, hasMeanings: false })).toEqual(['meaning']); // rien à afficher : repli
+    expect(modesFor(['kanjiReverse'], kana)).toEqual(['choice']); // repli sur l'exercice de base
+    expect(modesFor(['reverse'], kanji)).toEqual(['meaning']);
+    expect(modesFor(['kanjiReverse'], { ...kanji, hasMeanings: false })).toEqual(['meaning']); // rien à afficher : repli
   });
   it('retombe sur l\'exercice de base de la famille si rien ne convient', () => {
     expect(modesFor(['drawing'], { ...kana, hasStrokes: false })).toEqual(['choice']);

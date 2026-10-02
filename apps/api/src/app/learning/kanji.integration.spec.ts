@@ -203,8 +203,8 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     });
 
     it('propose le QCM inversé d\'un kanji : le bon kanji parmi quatre, du même niveau JLPT, sans sens partagé', async () => {
-      const session = await getSession(cookieA, 'count=50&types=kanji&modes=reverse');
-      expect(session.cards.every((card) => card.mode === 'reverse' && card.choices?.length === 4)).toBe(true);
+      const session = await getSession(cookieA, 'count=50&types=kanji&modes=kanjiReverse');
+      expect(session.cards.every((card) => card.mode === 'kanjiReverse' && card.choices?.length === 4)).toBe(true);
       const levels = await dataSource.query(`SELECT character, coalesce(metadata ->> 'jlpt', 'other') AS level, meanings FROM items WHERE type = 'kanji'`);
       const byChar = new Map<string, { level: string; meanings: string[] }>(levels.map((row: { character: string; level: string; meanings: string[] }) => [row.character, row]));
       for (const card of session.cards) {
@@ -218,10 +218,18 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       }
     });
 
+    it('ne mélange pas les QCM inversés : celui des kanji ne s\'applique pas aux kana, ni l\'inverse', async () => {
+      const mixed = await getSession(cookieA, 'count=50&types=hiragana,kanji&modes=reverse,kanjiReverse');
+      expect(mixed.cards.filter((card) => card.item.type === 'hiragana').every((card) => card.mode === 'reverse')).toBe(true);
+      expect(mixed.cards.filter((card) => card.item.type === 'kanji').every((card) => card.mode === 'kanjiReverse')).toBe(true);
+      const kanjiId = await idOf('日');
+      expect((await answer(cookieA, kanjiId, 'reverse', '日')).status).toBe(400); // exercice de kana sur un kanji
+    });
+
     it('corrige le QCM inversé d\'un kanji', async () => {
       const id = await idOf('日');
-      expect(await json<ReviewResultDto>(await answer(cookieA, id, 'reverse', '日'))).toMatchObject({ correct: true, expected: '日' });
-      expect(await json<ReviewResultDto>(await answer(cookieA, id, 'reverse', '月'))).toMatchObject({ correct: false, expected: '日' });
+      expect(await json<ReviewResultDto>(await answer(cookieA, id, 'kanjiReverse', '日'))).toMatchObject({ correct: true, expected: '日' });
+      expect(await json<ReviewResultDto>(await answer(cookieA, id, 'kanjiReverse', '月'))).toMatchObject({ correct: false, expected: '日' });
     });
 
     it('retombe sur le sens quand un réglage « kana » ne convient pas aux kanji', async () => {

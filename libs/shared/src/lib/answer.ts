@@ -1,4 +1,4 @@
-import { DRAWING_ANSWERS, type KanjiReadings, type ReviewMode } from './learning';
+import { DRAWING_ANSWERS, isReverseMode, type KanjiReadings, type ReviewMode } from './learning';
 import { kanaToRomaji } from './kana';
 import { isRomajiCorrect } from './romaji';
 
@@ -40,6 +40,7 @@ export function isAnswerCorrect(mode: ReviewMode, answer: string, item: Answerab
     case 'reading':
       return isReadingCorrect(answer, item.readings);
     case 'reverse':
+    case 'kanjiReverse':
       return item.character !== undefined && answer === item.character;
     default:
       return isRomajiCorrect(answer, item.readings);
@@ -67,7 +68,7 @@ export function displayReadings(kanji: KanjiReadings): string {
 
 /** La bonne réponse à afficher en cas d'erreur, selon l'exercice. */
 export function expectedAnswer(mode: ReviewMode, item: AnswerableItem): string {
-  if (mode === 'reverse') return item.character ?? '';
+  if (isReverseMode(mode)) return item.character ?? '';
   if (mode === 'meaning') return displayMeanings(item);
   if (mode === 'reading') return item.kanji ? displayReadings(item.kanji) : (item.readings[0] ?? '');
   if (mode === 'drawing' && item.kanji) return displayMeanings(item);

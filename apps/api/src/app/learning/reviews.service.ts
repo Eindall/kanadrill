@@ -123,7 +123,7 @@ export class ReviewsService {
     for (const item of items) pools.set(item.type, [...(pools.get(item.type) ?? []), item]);
     const decoys = modes.includes('meaning') ? await this.sampleMeaningDecoys() : [];
     // Leurres du QCM inversé d'un kanji : des kanji du même niveau JLPT (sinon la rareté du caractère trahit la réponse).
-    const kanjiByLevel = composed.some(({ candidate }, i) => modes[i] === 'reverse' && candidate.item.type === 'kanji')
+    const kanjiByLevel = composed.some(({ candidate }, i) => modes[i] === 'kanjiReverse')
       ? await this.sampleKanjiByLevel()
       : new Map<string, ReverseSubject[]>();
     // Modèles de tracé : seulement pour les cartes de tracé.
@@ -137,7 +137,8 @@ export class ReviewsService {
         mode,
         ...(mode === 'choice' ? { choices: buildChoices(item, pools.get(item.type) ?? []) } : {}),
         ...(mode === 'meaning' ? { choices: buildMeaningChoices(item, decoys) } : {}),
-        ...(mode === 'reverse' ? { choices: this.reverseChoices(item, pools, kanjiByLevel) } : {}),
+        ...(mode === 'reverse' ? { choices: buildReverseChoices(item, 'reading', [pools.get(item.type) ?? []]) } : {}),
+        ...(mode === 'kanjiReverse' ? { choices: this.kanjiReverseChoices(item, kanjiByLevel) } : {}),
         ...(mode === 'drawing' ? { strokes: strokes.get(item.id) ?? [] } : {}),
         isNew: origin === 'new',
       };
@@ -177,9 +178,8 @@ export class ReviewsService {
     }));
   }
 
-  /** Quatre caractères dont le bon : des kana du même type (qui ne se lisent pas pareil), ou des kanji du même niveau. */
-  private reverseChoices(item: SessionItem, pools: Map<string, SessionItem[]>, kanjiByLevel: Map<string, ReverseSubject[]>): string[] {
-    if (item.type !== 'kanji') return buildReverseChoices(item, 'reading', [pools.get(item.type) ?? []]);
+  /** Quatre kanji dont le bon : des kanji du même niveau JLPT (puis des autres niveaux), sans sens partagé. */
+  private kanjiReverseChoices(item: SessionItem, kanjiByLevel: Map<string, ReverseSubject[]>): string[] {
     const sameLevel = kanjiByLevel.get(item.level) ?? [];
     const others = [...kanjiByLevel.entries()].filter(([level]) => level !== item.level).flatMap(([, subjects]) => subjects);
     return buildReverseChoices(item, 'meaning', [sameLevel, others]);
@@ -272,13 +272,7 @@ export class ReviewsService {
       kanji: item.type === 'kanji' ? { on: meta.on ?? [], kun: meta.kun ?? [] } : undefined,
     };
     const correct = isAnswerCorrect(request.mode, request.answer, subject);
-    const rating = gradeAnswer({
-      correct,
-      mode: request.mode,
-      durationMs: request.durationMs,
-      answer: request.answer,
-      kanji: item.type === 'kanji',
-    });
+    const rating = gradeAnswer({ correct, mode: request.mode, durationMs: request.durationMs, answer: request.answer });
 
     const nextDue = await this.dataSource.transaction(async (manager) => {
       // Première réponse : la carte est créée avec les valeurs par défaut (= carte vierge).

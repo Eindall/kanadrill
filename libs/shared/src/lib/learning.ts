@@ -149,16 +149,19 @@ export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana', 'kanj
  * QCM (retrouver la lecture parmi des propositions), saisie libre du romaji, ou tracé : on voit la lecture, on
  * dessine le kana à la main, puis on s'auto-évalue face au modèle (le tracé n'est proposé que sur écran tactile).
  */
-export type ReviewMode = 'choice' | 'typing' | 'drawing' | 'meaning' | 'reading' | 'reverse';
-export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'meaning', 'reading', 'reverse'];
+export type ReviewMode = 'choice' | 'typing' | 'drawing' | 'meaning' | 'reading' | 'reverse' | 'kanjiReverse';
+export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'meaning', 'reading', 'reverse', 'kanjiReverse'];
 
 /**
  * Exercices propres à chaque famille : un kana se demande par sa lecture (QCM ou saisie), un kanji par son sens
- * (QCM) ou sa lecture (saisie en romaji ou en kana) ; le tracé et le QCM inversé (on voit la lecture d'un kana ou
- * le sens d'un kanji, et on retrouve le caractère parmi quatre) valent pour les deux.
+ * (QCM) ou sa lecture (saisie en romaji ou en kana) ; le tracé vaut pour les deux. Chaque famille a aussi son QCM
+ * inversé, activable séparément : on voit la lecture d'un kana (`reverse`) ou le sens d'un kanji (`kanjiReverse`) et
+ * on retrouve le caractère parmi quatre.
  */
 export const KANA_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing', 'reverse'];
-export const KANJI_MODES: readonly ReviewMode[] = ['meaning', 'reading', 'drawing', 'reverse'];
+export const KANJI_MODES: readonly ReviewMode[] = ['meaning', 'reading', 'drawing', 'kanjiReverse'];
+/** Les QCM inversés : la réponse est le caractère choisi. */
+export const isReverseMode = (mode: ReviewMode): boolean => mode === 'reverse' || mode === 'kanjiReverse';
 export const isKanjiType = (type: ItemType): boolean => type === 'kanji';
 export const modesOfType = (type: ItemType): readonly ReviewMode[] => (isKanjiType(type) ? KANJI_MODES : KANA_MODES);
 
