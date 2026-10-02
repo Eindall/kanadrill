@@ -1,7 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import {
-  REVIEW_MODES,
   SESSION_SIZES,
   SESSION_TYPES,
   type ItemType,
@@ -9,8 +8,9 @@ import {
   type ReviewOverviewDto,
   type SessionSize,
 } from '@kanadrill/shared';
+import { isTouchDevice } from '../../core/device';
 import { ReviewService } from '../../core/review.service';
-import { configToParams, loadSavedConfig, MODE_LABELS, saveConfig, TYPE_LABELS, validateConfig } from './session-config';
+import { adaptToDevice, availableModes, configToParams, loadSavedConfig, MODE_LABELS, saveConfig, TYPE_LABELS, validateConfig } from './session-config';
 
 /** Classes d'une case à cocher / d'un choix : la bordure et le fond suivent l'état de l'`<input>` caché. */
 const OPTION =
@@ -106,11 +106,12 @@ export class SetupPage {
   protected readonly option = OPTION;
   protected readonly sizes = SESSION_SIZES;
   protected readonly types = SESSION_TYPES;
-  protected readonly modes = REVIEW_MODES;
+  private readonly touch = isTouchDevice();
+  protected readonly modes = availableModes(this.touch);
   protected readonly typeLabels = TYPE_LABELS;
   protected readonly modeLabels = MODE_LABELS;
 
-  private readonly saved = loadSavedConfig();
+  private readonly saved = adaptToDevice(loadSavedConfig(), this.touch);
   protected readonly count = signal<SessionSize>(this.saved.count);
   protected readonly selectedTypes = signal<ItemType[]>(this.saved.types);
   protected readonly selectedModes = signal<ReviewMode[]>(this.saved.modes);

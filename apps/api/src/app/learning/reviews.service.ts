@@ -5,7 +5,7 @@ import { fsrs, generatorParameters, type Grade } from 'ts-fsrs';
 import { DataSource, In, Repository } from 'typeorm';
 import {
   CARD_STATE,
-  isRomajiCorrect,
+  isAnswerCorrect,
   SESSION_TYPES,
   type ItemDto,
   type ItemType,
@@ -14,17 +14,20 @@ import {
   type ReviewSessionDto,
   type SessionCardDto,
   type SessionConfig,
+  type StrokeDto,
   type SubmitReviewRequest,
 } from '@kanadrill/shared';
 import { DEFAULT_TIMEZONE } from '../config/env';
 import { User } from '../users/user.entity';
 import { buildChoices } from './choices';
-import { composeSession, pickMode, type CardOrigin } from './compose-session';
+import { composeSession, modesFor, pickMode, type CardOrigin } from './compose-session';
 import { applyCard, toCard } from './fsrs-card';
 import { gradeAnswer } from './grading';
 import { Item } from './item.entity';
 import { ReviewLog } from './review-log.entity';
 import { UserItem } from './user-item.entity';
+
+const strokesOf = (item: Item): StrokeDto[] => (item.metadata as { strokes?: StrokeDto[] } | null)?.strokes ?? [];
 
 @Injectable()
 export class ReviewsService {
@@ -69,11 +72,13 @@ export class ReviewsService {
     for (const item of items) pools.set(item.type, [...(pools.get(item.type) ?? []), item]);
 
     const cards = composed.map(({ candidate, origin }): SessionCardDto => {
-      const mode = pickMode(config.modes);
+      const strokes = strokesOf(candidate.item);
+      const mode = pickMode(modesFor(config.modes, strokes.length > 0));
       return {
         item: this.toItemDto(candidate.item),
         mode,
         ...(mode === 'choice' ? { choices: buildChoices(candidate.item, pools.get(candidate.item.type) ?? []) } : {}),
+        ...(mode === 'drawing' ? { strokes } : {}),
         isNew: origin === 'new',
       };
     });
@@ -122,7 +127,7 @@ export class ReviewsService {
     const item = await this.items.findOneBy({ id: request.itemId });
     if (!item) throw new NotFoundException('Élément introuvable');
 
-    const correct = isRomajiCorrect(request.answer, item.readings);
+    const correct = isAnswerCorrect(request.mode, request.answer, item.readings);
     const rating = gradeAnswer({ correct, mode: request.mode, durationMs: request.durationMs });
 
     const nextDue = await this.dataSource.transaction(async (manager) => {

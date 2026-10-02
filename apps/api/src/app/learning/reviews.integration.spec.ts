@@ -52,7 +52,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     (await (await call(cookie, 'GET', sessionUrl(query))).json()) as ReviewSessionDto;
   const getOverview = async (cookie: string) =>
     (await (await call(cookie, 'GET', '/reviews/overview')).json()) as ReviewOverviewDto;
-  const answer = (cookie: string, id: string, answerText: string, mode: 'choice' | 'typing' = 'choice', durationMs = 3000) =>
+  const answer = (cookie: string, id: string, answerText: string, mode: 'choice' | 'typing' | 'drawing' = 'choice', durationMs = 3000) =>
     call(cookie, 'POST', '/reviews', { itemId: id, mode, answer: answerText, durationMs });
   const characters = (session: ReviewSessionDto) => session.cards.map((card) => card.item.character);
 
@@ -102,7 +102,8 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(await status('count=15&types=kanji&modes=choice')).toBe(400); // pas encore disponible
     expect(await status('count=15&types=hiragana,hiragana&modes=choice')).toBe(400);
     expect(await status('count=15&types=hiragana')).toBe(400); // pas de mode
-    expect(await status('count=15&types=hiragana&modes=drawing')).toBe(400);
+    expect(await status('count=15&types=hiragana&modes=dessin')).toBe(400);
+    expect(await status('count=15&types=hiragana&modes=drawing')).toBe(200);
     expect(await status('count=15&types=hiragana&modes=choice&limit=3')).toBe(400);
     expect(await status('count=15&types=hiragana&modes=choice')).toBe(200);
     expect(await status('count=50&types=hiragana,katakana&modes=choice,typing')).toBe(200);
@@ -143,6 +144,29 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     const both = await getSession(cookieA, 'count=50&types=hiragana&modes=choice,typing');
     expect(new Set(both.cards.map((card) => card.mode))).toEqual(new Set(['choice', 'typing']));
     expect(both.cards.every((card) => (card.mode === 'choice') === (card.choices !== undefined))).toBe(true);
+  });
+
+  it('propose le modèle du tracé (traits) aux cartes « tracé », et seulement à elles', async () => {
+    const drawing = await getSession(cookieA, 'count=15&types=hiragana,katakana&modes=drawing');
+    expect(drawing.cards.every((card) => card.mode === 'drawing' && card.choices === undefined)).toBe(true);
+    expect(drawing.cards.every((card) => (card.strokes?.length ?? 0) > 0 && card.strokes![0].d.startsWith('M'))).toBe(true);
+
+    const mixed = await getSession(cookieA, 'count=50&types=hiragana&modes=choice,drawing');
+    expect(new Set(mixed.cards.map((card) => card.mode))).toEqual(new Set(['choice', 'drawing']));
+    expect(mixed.cards.every((card) => (card.mode === 'drawing') === (card.strokes !== undefined))).toBe(true);
+  });
+
+  it('prend l\'auto-évaluation d\'un tracé comme réponse', async () => {
+    // Un compte à part : les tests d'isolation attendent que bob n'ait encore rien répondu.
+    const dave = await dataSource.getRepository(User).save({ username: 'dave', avatarUrl: null });
+    const cookieD = await loginAs(dave.id);
+    const ok = (await (await answer(cookieD, await itemId('ま'), 'correct', 'drawing', 9000)).json()) as ReviewResultDto;
+    expect(ok).toMatchObject({ correct: true, expected: 'ma', rating: 3 });
+    const ko = (await (await answer(cookieD, await itemId('ね'), 'wrong', 'drawing', 9000)).json()) as ReviewResultDto;
+    expect(ko).toMatchObject({ correct: false, expected: 'ne', rating: 1 });
+    // Ce que l'utilisateur « écrit » n'a pas de sens au tracé : seule l'auto-évaluation compte.
+    const other = (await (await answer(cookieD, await itemId('ほ'), 'ho', 'drawing', 9000)).json()) as ReviewResultDto;
+    expect(other.correct).toBe(false);
   });
 
   it('indique les cartes disponibles par type et l\'objectif du jour', async () => {

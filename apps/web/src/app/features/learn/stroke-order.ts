@@ -1,4 +1,4 @@
-import { Component, input, signal } from '@angular/core';
+import { Component, computed, input, signal } from '@angular/core';
 import type { StrokeDto } from '@kanadrill/shared';
 
 /** Délai entre le début de deux traits consécutifs, en secondes (voir `--delay` dans le gabarit). */
@@ -26,7 +26,7 @@ const STROKE_DELAY_S = 0.9;
             <path [attr.d]="stroke.d" />
           }
         </g>
-        @for (run of [runId()]; track run) {
+        @for (run of runs(); track run.id) {
           <g class="ink">
             @for (stroke of strokes(); track $index) {
               <path [attr.d]="stroke.d" pathLength="1" [style.--delay]="$index * delay + 's'" />
@@ -105,6 +105,7 @@ export class StrokeOrder {
   protected readonly numbers = signal(true);
   /** Changer cette valeur recrée les traits : l'animation repart de zéro. */
   protected readonly runId = signal(0);
+  protected readonly runs = computed(() => [{ id: this.runId() }]);
 
   protected replay(): void {
     this.runId.update((id) => id + 1);

@@ -2,12 +2,16 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { isRomajiCorrect, type SessionConfig } from '@kanadrill/shared';
+import { DRAWING_ANSWERS, isAnswerCorrect, type SessionConfig } from '@kanadrill/shared';
 import { ReviewService } from '../../core/review.service';
+import { DrawingPad } from './drawing-pad';
+import type { Point } from './drawing-path';
+import { StrokeOrder } from '../learn/stroke-order';
 import { advanceQueue, summarize, toQueue, type Attempt, type QueueEntry } from './review-queue';
 import { configFromParams, TYPE_LABELS } from './session-config';
 
-type Phase = 'loading' | 'error' | 'question' | 'feedback' | 'done';
+/** `compare` : au tracé, le modèle est affiché et l'utilisateur s'auto-évalue. */
+type Phase = 'loading' | 'error' | 'question' | 'compare' | 'feedback' | 'done';
 
 interface Feedback {
   correct: boolean;
@@ -20,7 +24,7 @@ interface Feedback {
 
 @Component({
   selector: 'app-review-page',
-  imports: [RouterLink, DatePipe, DecimalPipe],
+  imports: [RouterLink, DatePipe, DecimalPipe, DrawingPad, StrokeOrder],
   host: { '(window:keydown)': 'onKeydown($event)' },
   template: `
     @switch (phase()) {
@@ -134,7 +138,16 @@ interface Feedback {
                   <span class="font-semibold text-ink">· Nouveau</span>
                 }
               </p>
-              <p class="font-kana text-[7rem] leading-none sm:text-[9rem]" lang="ja">{{ current.item.character }}</p>
+              @if (current.mode === 'drawing') {
+                <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ current.item.readings[0] }}</p>
+                @if (phase() === 'question') {
+                  <p class="text-sm text-ink-soft">Dessine ce kana avec le doigt, trait par trait.</p>
+                } @else {
+                  <p class="font-kana text-5xl leading-none" lang="ja">{{ current.item.character }}</p>
+                }
+              } @else {
+                <p class="font-kana text-[7rem] leading-none sm:text-[9rem]" lang="ja">{{ current.item.character }}</p>
+              }
             </div>
 
             @if (current.mode === 'choice') {
@@ -150,7 +163,7 @@ interface Feedback {
                   </button>
                 }
               </div>
-            } @else {
+            } @else if (current.mode === 'typing') {
               @if (phase() === 'question') {
                 <form class="flex flex-col gap-3 sm:flex-row" (submit)="submitTyped($event)">
                   <input
@@ -176,10 +189,56 @@ interface Feedback {
                   </button>
                 </form>
               }
+            } @else if (phase() === 'question') {
+              <app-drawing-pad [(strokes)]="drawn" />
+              <button
+                type="button"
+                [disabled]="drawn().length === 0"
+                (click)="reveal()"
+                class="bg-ink px-8 py-4 text-lg font-medium text-paper hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Voir le modèle
+              </button>
+            } @else if (phase() === 'compare') {
+              <div class="grid grid-cols-2 gap-3">
+                <div class="flex flex-col items-center gap-2">
+                  <h2 class="text-sm font-medium">Ton tracé</h2>
+                  <app-drawing-pad [strokes]="drawn()" [locked]="true" />
+                </div>
+                <div class="flex flex-col items-center gap-2">
+                  <h2 class="text-sm font-medium">Modèle</h2>
+                  <app-stroke-order [strokes]="current.strokes ?? []" />
+                </div>
+              </div>
+              <p class="text-center text-sm text-ink-soft">
+                @if (drawn().length === (current.strokes?.length ?? 0)) {
+                  Même nombre de traits : {{ drawn().length }}. Compare aussi leur ordre et leur sens.
+                } @else {
+                  Tu as tracé {{ drawn().length }} {{ drawn().length > 1 ? 'traits' : 'trait' }}, le modèle en compte
+                  {{ current.strokes?.length ?? 0 }}.
+                }
+              </p>
+              <div class="grid grid-cols-2 gap-3" role="group" aria-label="Ton tracé était-il bon ?">
+                <button
+                  type="button"
+                  (click)="answer(drawingAnswers.wrong)"
+                  class="border-2 border-seal px-4 py-4 text-lg font-medium text-seal hover:bg-seal hover:text-paper"
+                >
+                  Raté
+                </button>
+                <button
+                  type="button"
+                  (click)="answer(drawingAnswers.correct)"
+                  class="bg-ok px-4 py-4 text-lg font-medium text-paper hover:bg-ok/90"
+                >
+                  Réussi
+                </button>
+              </div>
             }
 
             <div aria-live="polite" class="min-h-28">
               @if (feedback(); as f) {
+                @if (current.mode !== 'drawing' || f.saveError) {
                 <div
                   class="flex flex-col gap-4 border-l-4 bg-paper p-4"
                   [class.border-ok]="f.correct"
@@ -218,6 +277,7 @@ interface Feedback {
                     </button>
                   }
                 </div>
+                }
               }
             </div>
           </section>
@@ -239,6 +299,9 @@ export class ReviewPage {
   protected readonly attempts = signal<Attempt[]>([]);
   protected readonly feedback = signal<Feedback | null>(null);
   protected readonly typed = signal('');
+  /** Traits dessinés à la carte « tracé » en cours. */
+  protected readonly drawn = signal<Point[][]>([]);
+  protected readonly drawingAnswers = DRAWING_ANSWERS;
 
   protected readonly entry = computed(() => this.queue()[0] ?? null);
   protected readonly card = computed(() => this.entry()?.card ?? null);
@@ -249,6 +312,8 @@ export class ReviewPage {
   private readonly answerInput = viewChild<ElementRef<HTMLInputElement>>('answerInput');
 
   private shownAt = 0;
+  /** Au tracé : instant où le modèle est affiché (la durée de la réponse s'arrête là, pas à l'auto-évaluation). */
+  private revealedAt = 0;
   private pendingSave: (() => Promise<void>) | null = null;
 
   constructor() {
@@ -268,6 +333,7 @@ export class ReviewPage {
     this.attempts.set([]);
     this.feedback.set(null);
     this.typed.set('');
+    this.drawn.set([]);
     try {
       const session = await this.reviews.loadSession(this.config);
       this.queue.set(toQueue(session.cards));
@@ -311,15 +377,23 @@ export class ReviewPage {
     if (this.typed().trim() !== '') void this.answer(this.typed());
   }
 
+  /** Au tracé : montre le modèle à côté du dessin, pour que l'utilisateur s'auto-évalue. */
+  protected reveal(): void {
+    if (this.phase() !== 'question' || this.drawn().length === 0) return;
+    this.revealedAt = performance.now();
+    this.phase.set('compare');
+  }
+
   protected async answer(text: string): Promise<void> {
     const entry = this.entry();
-    if (!entry || this.phase() !== 'question') return;
+    const phase = this.phase();
+    if (!entry || (phase !== 'question' && phase !== 'compare')) return;
     const card = entry.card;
-    const durationMs = Math.round(performance.now() - this.shownAt);
+    const durationMs = Math.round((card.mode === 'drawing' ? this.revealedAt : performance.now()) - this.shownAt);
 
     // Retour immédiat avec la même logique que le serveur ; la réponse du serveur fait foi ensuite.
     this.feedback.set({
-      correct: isRomajiCorrect(text, card.item.readings),
+      correct: isAnswerCorrect(card.mode, text, card.item.readings),
       expected: card.item.readings[0],
       answer: text,
       saving: true,
@@ -337,6 +411,8 @@ export class ReviewPage {
         ]);
         this.feedback.update((f) => f && { ...f, correct: result.correct, expected: result.expected, saving: false });
         this.pendingSave = null;
+        // Au tracé, l'auto-évaluation suffit : pas d'écran de résultat, on enchaîne.
+        if (card.mode === 'drawing') this.next();
       } catch {
         this.feedback.update((f) => f && { ...f, saving: false, saveError: true });
       }
@@ -354,6 +430,7 @@ export class ReviewPage {
     this.queue.update((queue) => advanceQueue(queue, f.correct));
     this.feedback.set(null);
     this.typed.set('');
+    this.drawn.set([]);
     if (this.queue().length === 0) {
       this.phase.set('done');
     } else {

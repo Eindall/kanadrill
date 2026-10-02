@@ -78,9 +78,15 @@ export const DEFAULT_SESSION_SIZE: SessionSize = 30;
 /** Types que l'on peut cocher pour une session (« kanji » s'ajoutera avec le dictionnaire perso). */
 export const SESSION_TYPES: readonly ItemType[] = ['hiragana', 'katakana'];
 
-/** QCM (retrouver la lecture parmi des propositions) ou saisie libre du romaji. */
-export type ReviewMode = 'choice' | 'typing';
-export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing'];
+/**
+ * QCM (retrouver la lecture parmi des propositions), saisie libre du romaji, ou tracé : on voit la lecture, on
+ * dessine le kana à la main, puis on s'auto-évalue face au modèle (le tracé n'est proposé que sur écran tactile).
+ */
+export type ReviewMode = 'choice' | 'typing' | 'drawing';
+export const REVIEW_MODES: readonly ReviewMode[] = ['choice', 'typing', 'drawing'];
+
+/** Au tracé, la « réponse » envoyée est l'auto-évaluation : l'une de ces deux valeurs. */
+export const DRAWING_ANSWERS = { correct: 'correct', wrong: 'wrong' } as const;
 
 /** Durée maximale prise en compte pour une réponse (au-delà, on plafonne : onglet laissé ouvert). */
 export const MAX_REVIEW_DURATION_MS = 120_000;
@@ -90,6 +96,8 @@ export interface SessionCardDto {
   mode: ReviewMode;
   /** Propositions du QCM (la bonne réponse y figure), uniquement si `mode` vaut `choice`. */
   choices?: string[];
+  /** Modèle du tracé (ordre des traits), uniquement si `mode` vaut `drawing`. */
+  strokes?: StrokeDto[];
   /** Jamais vue par l'utilisateur. */
   isNew: boolean;
 }
@@ -123,7 +131,7 @@ export interface ReviewOverviewDto {
 export interface SubmitReviewRequest {
   itemId: string;
   mode: ReviewMode;
-  /** Romaji saisi, ou proposition choisie au QCM. */
+  /** Romaji saisi, proposition choisie au QCM, ou auto-évaluation du tracé (`DRAWING_ANSWERS`). */
   answer: string;
   durationMs: number;
 }

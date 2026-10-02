@@ -1,4 +1,4 @@
-import { CARD_STATE } from '@kanadrill/shared';
+import { CARD_STATE, type ReviewMode } from '@kanadrill/shared';
 import { shuffle } from './shuffle';
 
 /** Une carte candidate pour une session : un item et l'état de l'utilisateur dessus (vierge s'il ne l'a jamais vu). */
@@ -61,4 +61,13 @@ export function composeSession<T extends Candidate>(
 /** Mode d'exercice d'une carte, tiré parmi ceux que l'utilisateur a cochés. */
 export function pickMode<M>(modes: readonly M[], random: () => number = Math.random): M {
   return modes[Math.floor(random() * modes.length)];
+}
+
+/**
+ * Les exercices possibles pour une carte parmi ceux cochés : le tracé exige un modèle (les traits). Une carte
+ * sans modèle, dans une session « tracé » seul, retombe sur le QCM plutôt que d'être écartée.
+ */
+export function modesFor(modes: readonly ReviewMode[], hasStrokes: boolean): ReviewMode[] {
+  const possible = hasStrokes ? [...modes] : modes.filter((mode) => mode !== 'drawing');
+  return possible.length > 0 ? possible : ['choice'];
 }

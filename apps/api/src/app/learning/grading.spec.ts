@@ -1,9 +1,10 @@
 import { REVIEW_RATING } from '@kanadrill/shared';
 import { buildChoices } from './choices';
-import { FAST_TYPING_MS, gradeAnswer, SLOW_ANSWER_MS } from './grading';
+import { FAST_TYPING_MS, gradeAnswer, SLOW_ANSWER_MS, SLOW_DRAWING_MS } from './grading';
+import { modesFor } from './compose-session';
 
 describe('gradeAnswer', () => {
-  const grade = (correct: boolean, mode: 'choice' | 'typing', durationMs: number) =>
+  const grade = (correct: boolean, mode: 'choice' | 'typing' | 'drawing', durationMs: number) =>
     gradeAnswer({ correct, mode, durationMs });
 
   it('note Again une mauvaise réponse, même rapide', () => {
@@ -17,6 +18,12 @@ describe('gradeAnswer', () => {
   it('note Hard une bonne réponse lente', () => {
     expect(grade(true, 'choice', SLOW_ANSWER_MS + 1)).toBe(REVIEW_RATING.Hard);
     expect(grade(true, 'typing', SLOW_ANSWER_MS + 1)).toBe(REVIEW_RATING.Hard);
+  });
+  it('note un tracé Again, Good, ou Hard seulement au-delà du seuil propre au tracé, jamais Easy', () => {
+    expect(grade(false, 'drawing', 500)).toBe(REVIEW_RATING.Again);
+    expect(grade(true, 'drawing', 500)).toBe(REVIEW_RATING.Good);
+    expect(grade(true, 'drawing', SLOW_ANSWER_MS + 1)).toBe(REVIEW_RATING.Good); // lent pour une saisie, normal pour un tracé
+    expect(grade(true, 'drawing', SLOW_DRAWING_MS + 1)).toBe(REVIEW_RATING.Hard);
   });
   it('ne note Easy qu\'une saisie rapide, jamais un QCM', () => {
     expect(grade(true, 'typing', FAST_TYPING_MS - 1)).toBe(REVIEW_RATING.Easy);
@@ -46,5 +53,17 @@ describe('buildChoices', () => {
   it('s\'adapte à un petit jeu de leurres', () => {
     const choices = buildChoices({ readings: ['a'] }, [{ readings: ['a'] }, { readings: ['i'] }]);
     expect(choices.sort()).toEqual(['a', 'i']);
+  });
+});
+
+describe('modesFor', () => {
+  it('garde tous les exercices cochés quand la carte a un modèle de tracé', () => {
+    expect(modesFor(['choice', 'drawing'], true)).toEqual(['choice', 'drawing']);
+  });
+  it('écarte le tracé pour une carte sans modèle', () => {
+    expect(modesFor(['typing', 'drawing'], false)).toEqual(['typing']);
+  });
+  it('retombe sur le QCM si le tracé était le seul exercice coché', () => {
+    expect(modesFor(['drawing'], false)).toEqual(['choice']);
   });
 });

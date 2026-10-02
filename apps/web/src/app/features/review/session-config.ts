@@ -9,7 +9,7 @@ import {
   type SessionSize,
 } from '@kanadrill/shared';
 
-export const MODE_LABELS: Record<ReviewMode, string> = { choice: 'QCM', typing: 'Texte libre' };
+export const MODE_LABELS: Record<ReviewMode, string> = { choice: 'QCM', typing: 'Texte libre', drawing: 'Tracé au doigt' };
 export const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
 
 const STORAGE_KEY = 'kanadrill.sessionConfig';
@@ -40,6 +40,17 @@ export function configFromParams(params: { get(name: string): string | null }): 
 
 export function configToParams(config: SessionConfig): Record<string, string> {
   return { count: String(config.count), types: config.types.join(','), modes: config.modes.join(',') };
+}
+
+/** Exercices proposés sur cet appareil : le tracé est réservé aux écrans tactiles. */
+export function availableModes(touch: boolean): readonly ReviewMode[] {
+  return REVIEW_MODES.filter((mode) => touch || mode !== 'drawing');
+}
+
+/** Adapte un réglage (mémorisé, donc possiblement d'un autre usage) à l'appareil : sans tracé hors écran tactile. */
+export function adaptToDevice(config: SessionConfig, touch: boolean): SessionConfig {
+  const modes = config.modes.filter((mode) => availableModes(touch).includes(mode));
+  return { ...config, modes: modes.length > 0 ? modes : ['choice'] };
 }
 
 /** Dernier réglage utilisé (par appareil), ou le réglage par défaut. */
