@@ -40,6 +40,12 @@ export class AuthService {
     this.user.set(await firstValueFrom(this.http.patch<UserDto>('/api/users/me', body)));
   }
 
+  /** Apparaître (ou non) dans le classement des autres utilisateurs. */
+  async updateLeaderboardVisible(leaderboardVisible: boolean): Promise<void> {
+    const body: UpdateProfileRequest = { leaderboardVisible };
+    this.user.set(await firstValueFrom(this.http.patch<UserDto>('/api/users/me', body)));
+  }
+
   /** Oublie l'utilisateur côté front (session expirée ou révoquée : le serveur a déjà répondu 401). */
   clearUser(): void {
     this.user.set(null);

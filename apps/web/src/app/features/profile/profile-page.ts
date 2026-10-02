@@ -100,6 +100,27 @@ const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
           }
         </section>
 
+        <section class="flex flex-col gap-3" aria-labelledby="leaderboard-label">
+          <h2 id="leaderboard-label" class="text-lg font-medium">Classement</h2>
+          <p class="text-sm text-ink-soft">
+            Le classement compare les séries de jours d'apprentissage des utilisateurs de KanaDrill : les autres y voient ton
+            pseudo, ton avatar et ta série (jamais tes cartes ni tes réponses).
+          </p>
+          <label class="flex cursor-pointer items-center gap-3 border border-line bg-paper px-4 py-3 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-seal">
+            <input
+              type="checkbox"
+              class="size-5 accent-ink"
+              [checked]="user.leaderboardVisible"
+              [disabled]="leaderboardSaving()"
+              (change)="setLeaderboardVisible($any($event.target).checked)"
+            />
+            <span class="font-medium">Apparaître dans le classement</span>
+          </label>
+          @if (leaderboardError()) {
+            <p role="alert" class="text-sm text-seal">{{ leaderboardError() }}</p>
+          }
+        </section>
+
         <section class="flex flex-col gap-3" aria-labelledby="sessions-label">
           <h2 id="sessions-label" class="text-lg font-medium">Appareils connectés</h2>
           <p class="text-sm text-ink-soft">
@@ -226,6 +247,8 @@ export class ProfilePage {
   protected readonly goalSaving = signal(false);
   protected readonly goalSaved = signal(false);
   protected readonly goalError = signal<string | null>(null);
+  protected readonly leaderboardSaving = signal(false);
+  protected readonly leaderboardError = signal<string | null>(null);
 
   protected readonly sessions = signal<SessionInfoDto[] | null>(null);
   protected readonly sessionsError = signal<string | null>(null);
@@ -269,6 +292,18 @@ export class ProfilePage {
       this.saveError.set("Le pseudo n'a pas pu être enregistré. Réessaie.");
     } finally {
       this.saving.set(false);
+    }
+  }
+
+  protected async setLeaderboardVisible(visible: boolean): Promise<void> {
+    this.leaderboardSaving.set(true);
+    this.leaderboardError.set(null);
+    try {
+      await this.auth.updateLeaderboardVisible(visible);
+    } catch {
+      this.leaderboardError.set("Le réglage n'a pas pu être enregistré. Réessaie.");
+    } finally {
+      this.leaderboardSaving.set(false);
     }
   }
 

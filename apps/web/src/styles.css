@@ -9,6 +9,8 @@
   --color-paper: #ffffff;
   --color-ink: #1b2437;
   --color-ink-soft: #55607a;
+  /* Gris-bleu des marques de second plan (graphiques) : assez clair pour se distinguer du vert `ok` (écart validé). */
+  --color-ink-faint: #8e9ab3;
   --color-line: #d3d9e3;
   --color-seal: #b3362b;
   --color-seal-dark: #8f2a21;

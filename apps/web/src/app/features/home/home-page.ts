@@ -1,16 +1,40 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { ReviewOverviewDto } from '@kanadrill/shared';
+import type { ReviewOverviewDto, StatsOverviewDto } from '@kanadrill/shared';
 import { AuthService } from '../../core/auth.service';
 import { goalProgress } from '../../core/goal';
 import { ReviewService } from '../../core/review.service';
+import { StatsService } from '../../core/stats.service';
+import { FlameIcon } from '../stats/flame-icon';
+import { StreakTimeline } from '../stats/streak-timeline';
 
 @Component({
   selector: 'app-home-page',
-  imports: [RouterLink],
+  imports: [RouterLink, FlameIcon, StreakTimeline],
   template: `
     <section class="flex flex-col gap-8">
       <h1 class="text-2xl font-semibold tracking-tight">Bonjour {{ auth.user()?.username }}</h1>
+
+      @if (streak(); as s) {
+        <a routerLink="/stats" class="flex flex-col gap-4 border border-line bg-paper p-5 hover:border-ink" aria-label="Voir mes statistiques">
+          <span class="flex items-center gap-4">
+            <span class="size-11 shrink-0" [class]="s.streak.current > 0 ? 'text-ink' : 'text-line'"><app-flame-icon /></span>
+            <span>
+              <span class="block text-2xl font-semibold leading-none">{{ s.streak.current }} {{ s.streak.current > 1 ? 'jours' : 'jour' }}</span>
+              <span class="text-sm text-ink-soft">
+                @if (s.streak.current === 0) {
+                  de série : réponds à une carte pour commencer
+                } @else if (s.streak.activeToday) {
+                  de série : c'est bon pour aujourd'hui
+                } @else {
+                  de série : réponds à une carte aujourd'hui pour la garder
+                }
+              </span>
+            </span>
+          </span>
+          <app-streak-timeline [days]="s.recent" [goal]="s.dailyGoal" [legend]="false" />
+        </a>
+      }
 
       <div class="flex flex-col gap-5 border border-line bg-paper p-6">
         <p class="font-kana text-5xl leading-none" aria-hidden="true">ひらがな</p>
@@ -59,6 +83,9 @@ import { ReviewService } from '../../core/review.service';
 export class HomePage {
   protected readonly auth = inject(AuthService);
   private readonly reviews = inject(ReviewService);
+  private readonly stats = inject(StatsService);
+
+  protected readonly streak = signal<StatsOverviewDto | null>(null);
 
   protected readonly overview = signal<ReviewOverviewDto | null>(null);
   protected readonly error = signal(false);
@@ -72,6 +99,11 @@ export class HomePage {
   );
 
   constructor() {
+    // La série est un confort : sans elle, le reste de l'accueil s'affiche quand même.
+    this.stats.loadOverview().then(
+      (overview) => this.streak.set(overview),
+      () => undefined,
+    );
     this.reviews.loadOverview().then(
       (overview) => this.overview.set(overview),
       () => this.error.set(true),

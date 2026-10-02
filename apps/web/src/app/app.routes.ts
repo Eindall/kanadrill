@@ -3,11 +3,13 @@ import { authGuard, guestGuard } from './core/auth.guard';
 import { AboutPage } from './features/about/about-page';
 import { HomePage } from './features/home/home-page';
 import { LoginPage } from './features/login/login-page';
+import { LeaderboardPage } from './features/leaderboard/leaderboard-page';
 import { ItemPage } from './features/learn/item-page';
 import { LearnPage } from './features/learn/learn-page';
 import { ReviewPage } from './features/review/review-page';
 import { SetupPage } from './features/review/setup-page';
 import { ProfilePage } from './features/profile/profile-page';
+import { StatsPage } from './features/stats/stats-page';
 import { Shell } from './layout/shell';
 
 export const appRoutes: Route[] = [
@@ -22,6 +24,8 @@ export const appRoutes: Route[] = [
       { path: 'review', component: ReviewPage, title: 'Révision · KanaDrill' },
       { path: 'learn', component: LearnPage, title: 'Apprendre · KanaDrill' },
       { path: 'learn/:id', component: ItemPage, title: 'Fiche · KanaDrill' },
+      { path: 'stats', component: StatsPage, title: 'Statistiques · KanaDrill' },
+      { path: 'leaderboard', component: LeaderboardPage, title: 'Classement · KanaDrill' },
       { path: 'about', component: AboutPage, title: 'À propos · KanaDrill' },
       { path: 'profile', component: ProfilePage, title: 'Mon profil · KanaDrill' },
     ],
