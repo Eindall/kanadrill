@@ -46,14 +46,9 @@ import { ReviewService } from '../../core/review.service';
             <p class="text-ink-soft">{{ due() }} {{ due() > 1 ? 'cartes' : 'carte' }} à revoir maintenant.</p>
           }
 
-          <div class="flex flex-col gap-3 sm:flex-row">
-            <a routerLink="/review/new" class="bg-seal px-6 py-3 text-center text-lg font-medium text-paper hover:bg-seal-dark">
-              Nouvelle session
-            </a>
-            <a routerLink="/learn" class="border border-ink px-6 py-3 text-center text-lg font-medium hover:bg-ink hover:text-paper">
-              Apprendre
-            </a>
-          </div>
+          <a routerLink="/review/new" class="self-start bg-seal px-6 py-3 text-lg font-medium text-paper hover:bg-seal-dark">
+            Nouvelle session
+          </a>
         } @else {
           <p role="status" class="text-ink-soft">Chargement de tes révisions…</p>
         }

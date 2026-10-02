@@ -1,15 +1,27 @@
 import { Component, inject } from '@angular/core';
-import { RouterLink, RouterOutlet } from '@angular/router';
+import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AppUpdateService } from '../core/app-update.service';
 import { AuthService } from '../core/auth.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterLink, RouterOutlet],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet],
   template: `
     <header class="border-b border-line bg-paper">
       <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-        <a routerLink="/" class="text-lg font-semibold tracking-tight">KanaDrill</a>
+        <div class="flex items-center gap-6">
+          <a routerLink="/" class="text-lg font-semibold tracking-tight">KanaDrill</a>
+          <nav aria-label="Navigation principale">
+            <a
+              routerLink="/learn"
+              routerLinkActive="border-ink text-ink"
+              ariaCurrentWhenActive="page"
+              class="border-b-2 border-transparent py-1 text-ink-soft hover:text-ink"
+            >
+              Apprendre
+            </a>
+          </nav>
+        </div>
 
         @if (auth.user(); as user) {
           <a routerLink="/profile" class="flex items-center gap-3" [attr.aria-label]="'Mon profil, ' + user.username">
