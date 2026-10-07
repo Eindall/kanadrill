@@ -18,7 +18,8 @@ import { UsersModule } from './users/users.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     // Limite globale : 100 requêtes/minute/IP (AuthController applique une limite plus stricte).
-    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
+    // Désactivée sous Jest (NODE_ENV=test) : les suites d'intégration enchaînent bien plus de connexions que 20/min.
+    ThrottlerModule.forRoot({ throttlers: [{ ttl: 60_000, limit: 100 }], skipIf: () => process.env['NODE_ENV'] === 'test' }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({

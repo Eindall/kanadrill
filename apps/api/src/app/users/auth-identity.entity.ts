@@ -17,6 +17,7 @@ import { User } from './user.entity';
  */
 @Entity('auth_identities')
 @Index(['provider', 'providerId'], { unique: true })
+@Index(['emailHash'])
 export class AuthIdentity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -30,6 +31,14 @@ export class AuthIdentity {
   /** Pseudo chez le fournisseur à la dernière connexion (affichage uniquement). */
   @Column({ name: 'display_name', type: 'varchar', length: 128, nullable: true })
   displayName!: string | null;
+
+  /**
+   * HMAC-SHA256 (hex) de l'e-mail **vérifié** par le fournisseur, pour détecter qu'une même personne se connecte
+   * avec un autre fournisseur. `null` si l'e-mail est absent ou non vérifié. Jamais exposé par l'API.
+   * Volontairement non unique : il ne sert qu'à signaler un doublon, jamais à lier des comptes.
+   */
+  @Column({ name: 'email_hash', type: 'varchar', length: 64, nullable: true })
+  emailHash!: string | null;
 
   @Column({ name: 'user_id', type: 'uuid' })
   userId!: string;

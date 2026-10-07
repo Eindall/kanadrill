@@ -9,6 +9,10 @@ const REQUIRED = [
   'DISCORD_CLIENT_ID',
   'DISCORD_CLIENT_SECRET',
   'DISCORD_REDIRECT_URI',
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'GOOGLE_REDIRECT_URI',
+  'EMAIL_HASH_KEY',
 ] as const;
 
 export function validateEnv(config: Record<string, unknown>): Record<string, unknown> {
@@ -18,6 +22,13 @@ export function validateEnv(config: Record<string, unknown>): Record<string, unk
   }
   if (String(config['JWT_SECRET']).length < 32) {
     throw new Error('JWT_SECRET doit faire au moins 32 caractères (ex. `openssl rand -hex 32`).');
+  }
+  const emailHashKey = String(config['EMAIL_HASH_KEY']);
+  if (emailHashKey.length < 32) {
+    throw new Error('EMAIL_HASH_KEY doit faire au moins 32 caractères (ex. `openssl rand -hex 32`).');
+  }
+  if (emailHashKey === String(config['JWT_SECRET'])) {
+    throw new Error('EMAIL_HASH_KEY doit être différente de JWT_SECRET.');
   }
   const timezone = config['APP_TIMEZONE'];
   if (timezone !== undefined && timezone !== '') {

@@ -21,6 +21,6 @@ import { SessionService } from './session.service';
     }),
   ],
   providers: [SessionService, SessionCleanupService, JwtAuthGuard],
-  exports: [SessionService, JwtAuthGuard],
+  exports: [SessionService, JwtAuthGuard, JwtModule],
 })
 export class SessionModule {}

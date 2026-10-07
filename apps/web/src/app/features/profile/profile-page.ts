@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import {
@@ -8,13 +8,21 @@ import {
   USERNAME_MAX_LENGTH,
   USERNAME_MIN_LENGTH,
   USERNAME_PATTERN,
+  isAuthProvider,
+  type AuthProvider,
   type SessionInfoDto,
 } from '@kanadrill/shared';
 import { AuthService } from '../../core/auth.service';
+import { PROVIDERS, PROVIDER_LABELS } from '../../core/providers';
 import { relativeTime } from '../../core/relative-time';
 import { SessionsService } from '../../core/sessions.service';
 
-const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
+const LINK_ERRORS: Record<string, string> = {
+  conflict: 'Ce compte est déjà lié à un autre compte KanaDrill. Il n\'a pas été ajouté.',
+  provider_taken: 'Un compte de ce service est déjà lié à ton profil.',
+  session: 'La liaison a été annulée : ta session a changé entre-temps. Réessaie.',
+  state: 'La liaison a expiré avant la fin. Réessaie.',
+};
 
 @Component({
   selector: 'app-profile-page',
@@ -173,16 +181,50 @@ const PROVIDER_LABELS: Record<string, string> = { discord: 'Discord' };
 
         <section class="flex flex-col gap-3" aria-labelledby="connections-label">
           <h2 id="connections-label" class="text-lg font-medium">Connexions</h2>
+          @if (linkNotice(); as notice) {
+            <p role="status" class="border-l-4 border-ink bg-paper px-4 py-3 text-sm">{{ notice }}</p>
+          }
+          @if (linkProblem(); as problem) {
+            <p role="alert" class="border-l-4 border-seal bg-paper px-4 py-3 text-sm">{{ problem }}</p>
+          }
           <ul class="divide-y divide-line border border-line bg-paper">
             @for (identity of user.identities; track identity.provider) {
-              <li class="flex flex-wrap items-baseline justify-between gap-x-4 px-4 py-3">
-                <span class="font-medium">{{ providerLabel(identity.provider) }}</span>
-                <span class="text-sm text-ink-soft">
-                  {{ identity.displayName }} · depuis le {{ identity.linkedAt | date: 'mediumDate' }}
-                </span>
+              <li class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
+                <div class="min-w-0">
+                  <p class="font-medium">{{ providerLabel(identity.provider) }}</p>
+                  <p class="text-sm text-ink-soft">
+                    {{ identity.displayName }} · depuis le {{ identity.linkedAt | date: 'mediumDate' }}
+                  </p>
+                </div>
+                @if (user.identities.length > 1) {
+                  <button
+                    type="button"
+                    (click)="unlink(identity.provider)"
+                    [disabled]="linkBusy()"
+                    class="text-sm text-seal underline underline-offset-4 disabled:opacity-40"
+                  >
+                    Dissocier
+                  </button>
+                } @else {
+                  <span class="text-sm text-ink-soft">Seule connexion : elle ne peut pas être dissociée.</span>
+                }
               </li>
             }
           </ul>
+          @if (unlinked(); as missing) {
+            <div class="flex flex-wrap gap-3">
+              @for (provider of missing; track provider) {
+                <button
+                  type="button"
+                  (click)="link(provider)"
+                  [disabled]="linkBusy()"
+                  class="border border-ink px-5 py-2.5 font-medium transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+                >
+                  Lier {{ providerLabel(provider) }}
+                </button>
+              }
+            </div>
+          }
         </section>
 
         <section class="flex flex-col items-start gap-6 border-t border-line pt-8">
@@ -219,6 +261,26 @@ export class ProfilePage {
   protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly sessionsApi = inject(SessionsService);
+
+  /** Retour d'une liaison (`?linked=google` ou `?link_error=conflict`), via les paramètres d'URL. */
+  readonly linked = input<string>();
+  readonly linkError = input<string>(undefined, { alias: 'link_error' });
+  protected readonly linkNotice = computed(() => {
+    const provider = this.linked();
+    return isAuthProvider(provider) ? `${PROVIDER_LABELS[provider]} est maintenant lié à ton compte.` : null;
+  });
+  protected readonly linkProblem = computed(() => {
+    const code = this.linkError();
+    return code ? (LINK_ERRORS[code] ?? "La liaison n'a pas abouti. Réessaie.") : this.linkFailure();
+  });
+  protected readonly linkFailure = signal<string | null>(null);
+  protected readonly linkBusy = signal(false);
+  /** Fournisseurs pas encore liés au compte (vide : rien à proposer). */
+  protected readonly unlinked = computed(() => {
+    const linked = new Set(this.auth.user()?.identities.map((identity) => identity.provider));
+    const missing = PROVIDERS.filter((provider) => !linked.has(provider));
+    return missing.length > 0 ? missing : null;
+  });
 
   protected readonly min = USERNAME_MIN_LENGTH;
   protected readonly max = USERNAME_MAX_LENGTH;
@@ -274,7 +336,30 @@ export class ProfilePage {
   }
 
   protected providerLabel(provider: string): string {
-    return PROVIDER_LABELS[provider] ?? provider;
+    return isAuthProvider(provider) ? PROVIDER_LABELS[provider] : provider;
+  }
+
+  protected async link(provider: AuthProvider): Promise<void> {
+    this.linkBusy.set(true);
+    this.linkFailure.set(null);
+    try {
+      window.location.assign(await this.auth.startLink(provider));
+    } catch {
+      this.linkFailure.set("La liaison n'a pas pu démarrer. Réessaie.");
+      this.linkBusy.set(false);
+    }
+  }
+
+  protected async unlink(provider: AuthProvider): Promise<void> {
+    this.linkBusy.set(true);
+    this.linkFailure.set(null);
+    try {
+      await this.auth.unlink(provider);
+    } catch {
+      this.linkFailure.set("La connexion n'a pas pu être dissociée (une connexion au moins doit rester).");
+    } finally {
+      this.linkBusy.set(false);
+    }
   }
 
   protected async saveUsername(event: Event): Promise<void> {

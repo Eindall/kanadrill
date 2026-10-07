@@ -30,6 +30,10 @@ services:
       DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?DISCORD_CLIENT_ID manquant dans .env}
       DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:?DISCORD_CLIENT_SECRET manquant dans .env}
       DISCORD_REDIRECT_URI: ${APP_URL}/api/auth/discord/callback
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID manquant dans .env}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET manquant dans .env}
+      GOOGLE_REDIRECT_URI: ${APP_URL}/api/auth/google/callback
+      EMAIL_HASH_KEY: ${EMAIL_HASH_KEY:?EMAIL_HASH_KEY manquant dans .env}
     networks:
       default:
         aliases: [kanadrill-api]

@@ -22,5 +22,9 @@ if (url) {
     DISCORD_CLIENT_ID: 'test-client-id',
     DISCORD_CLIENT_SECRET: 'test-client-secret',
     DISCORD_REDIRECT_URI: 'http://localhost:4200/api/auth/discord/callback',
+    GOOGLE_CLIENT_ID: 'test-google-client-id',
+    GOOGLE_CLIENT_SECRET: 'test-google-client-secret',
+    GOOGLE_REDIRECT_URI: 'http://localhost:4200/api/auth/google/callback',
+    EMAIL_HASH_KEY: 'test-email-hash-key-test-email-hash-key',
   });
 }

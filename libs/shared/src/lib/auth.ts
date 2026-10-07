@@ -1,6 +1,15 @@
 /** Fournisseurs d'authentification supportés. Ajouter ici pour en activer un nouveau. */
-export const AUTH_PROVIDERS = ['discord'] as const;
+export const AUTH_PROVIDERS = ['discord', 'google'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
+
+export function isAuthProvider(value: unknown): value is AuthProvider {
+  return typeof value === 'string' && (AUTH_PROVIDERS as readonly string[]).includes(value);
+}
+
+/** Réponse de `POST /api/auth/:provider/link` : l'URL d'autorisation chez le fournisseur, vers laquelle naviguer. */
+export interface LinkStartResponse {
+  url: string;
+}
 
 /** Règles du pseudo, partagées entre le front (validation de formulaire) et l'API. */
 export const USERNAME_MIN_LENGTH = 2;

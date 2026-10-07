@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
-import type { UpdateProfileRequest, UserDto } from '@kanadrill/shared';
+import type { AuthProvider, LinkStartResponse, UpdateProfileRequest, UserDto } from '@kanadrill/shared';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -44,6 +44,18 @@ export class AuthService {
   async updateLeaderboardVisible(leaderboardVisible: boolean): Promise<void> {
     const body: UpdateProfileRequest = { leaderboardVisible };
     this.user.set(await firstValueFrom(this.http.patch<UserDto>('/api/users/me', body)));
+  }
+
+  /** Démarre la liaison d'un fournisseur : renvoie l'URL d'autorisation vers laquelle naviguer. */
+  async startLink(provider: AuthProvider): Promise<string> {
+    const response = await firstValueFrom(this.http.post<LinkStartResponse>(`/api/auth/${provider}/link`, {}));
+    return response.url;
+  }
+
+  /** Dissocie un fournisseur (refusé par l'API pour la dernière connexion). */
+  async unlink(provider: AuthProvider): Promise<void> {
+    await firstValueFrom(this.http.delete<void>(`/api/users/me/identities/${provider}`));
+    await this.refresh();
   }
 
   /** Oublie l'utilisateur côté front (session expirée ou révoquée : le serveur a déjà répondu 401). */

@@ -1,13 +1,13 @@
 # KanaDrill
 
-Application web pour réviser le japonais un peu chaque jour : d'abord les kana, puis les kanjis, en répétition espacée. Comptes via Discord, progression propre à chaque utilisateur.
+Application web pour réviser le japonais un peu chaque jour : d'abord les kana, puis les kanjis, en répétition espacée. Comptes via Discord ou Google, progression propre à chaque utilisateur.
 
 > Contexte, décisions et feuille de route : [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md).
 
 **Stack** : Nx · NestJS + TypeORM + PostgreSQL · Angular + Tailwind CSS · Docker Compose.
 
 ```
-apps/api       API NestJS (auth Discord, profil, migrations)
+apps/api       API NestJS (auth Discord et Google, profil, migrations)
 apps/web       Front Angular (PWA à venir)
 libs/shared    Types partagés front/back
 ```
@@ -24,7 +24,15 @@ Node.js 22, npm, Docker (avec Compose).
    - développement : `http://localhost:4200/api/auth/discord/callback`
    - production : `https://ton-domaine/api/auth/discord/callback`
 
-Le scope demandé est `identify` uniquement (pseudo + avatar, pas d'e-mail).
+Les scopes demandés sont `identify` et `email` : l'e-mail n'est **jamais stocké**, il sert uniquement à calculer une empreinte (HMAC) qui détecte qu'une même personne se connecte avec Discord puis avec Google.
+
+## 1 bis. Créer l'application Google
+
+1. <https://console.cloud.google.com/> → **API et services → Écran de consentement OAuth** (type externe), puis **Identifiants → Créer des identifiants → ID client OAuth** (application Web).
+2. **URI de redirection autorisés** :
+   - développement : `http://localhost:4200/api/auth/google/callback`
+   - production : `https://ton-domaine/api/auth/google/callback`
+3. Renseigne `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, et `EMAIL_HASH_KEY` (`openssl rand -hex 32`, différente de `JWT_SECRET`) dans `.env`.
 
 ## 2. Développement
 
