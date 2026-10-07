@@ -41,7 +41,7 @@ import { WeeklyKanjiCard } from './weekly-kanji-card';
       }
 
       <div class="flex flex-col gap-5 border border-line bg-paper p-6">
-        <p class="font-kana text-5xl leading-none" aria-hidden="true">ひらがな</p>
+        <p class="font-kana text-5xl leading-none" lang="ja" aria-hidden="true">今日の目標</p>
 
         @if (error()) {
           <p role="alert" class="text-seal">Impossible de charger tes révisions pour l'instant.</p>
