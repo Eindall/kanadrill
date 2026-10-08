@@ -1,22 +1,78 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * Palette : encre indigo sur papier de neige, avec un rouge de sceau (hanko) réservé aux
- * actions et aux états importants.
+ * actions et aux états importants. Les valeurs vivent dans des variables (clair sur :root, sombre sur .dark)
+ * exposées à Tailwind par `@theme inline` : les utilitaires (`bg-paper`, `text-ink`…) suivent le thème sans
+ * toucher aux templates.
+ *
+ * Fond plein + texte : `bg-ink text-on-ink`, `bg-seal text-on-seal`, `bg-ok text-on-ok`. Jamais `text-paper`
+ * sur un fond plein (en sombre `paper` est foncé et `seal` est clair : seule la paire `on-*` garde le contraste).
+ *
+ * Le thème sombre est une palette à part, pas une inversion : contrastes ≥ 4,5:1 pour le texte (ink 13,4:1,
+ * ink-soft 7,3:1, seal 4,9:1, ok 5,9:1 sur `paper`), ≥ 3:1 pour les marques de graphique.
  */
-@theme {
-  --color-snow: #eef1f5;
-  --color-paper: #ffffff;
-  --color-ink: #1b2437;
-  --color-ink-soft: #55607a;
+:root {
+  color-scheme: light;
+  --snow: #eef1f5;
+  --paper: #ffffff;
+  --ink: #1b2437;
+  --ink-soft: #55607a;
   /* Gris-bleu des marques de second plan (graphiques) : assez clair pour se distinguer du vert `ok` (écart validé). */
-  --color-ink-faint: #8e9ab3;
-  --color-line: #d3d9e3;
-  --color-seal: #b3362b;
-  --color-seal-dark: #8f2a21;
+  --ink-faint: #8e9ab3;
+  --line: #d3d9e3;
+  --seal: #b3362b;
+  --seal-dark: #8f2a21;
   /* Vert discret pour confirmer une bonne réponse (le rouge reste réservé aux erreurs). */
-  --color-ok: #2c6e49;
+  --ok: #2c6e49;
+  --on-ink: #ffffff;
+  --on-seal: #ffffff;
+  --on-ok: #ffffff;
+  /* Rampe de maîtrise : du plus récent au plus solide, une teinte qui s'assombrit. */
+  --mastery-learning: #9aa5bd;
+  --mastery-known: #55607a;
+  --mastery-mastered: #1b2437;
+}
 
+.dark {
+  color-scheme: dark;
+  --snow: #0f1522;
+  --paper: #192033;
+  --ink: #e6eaf2;
+  --ink-soft: #a4aec4;
+  --ink-faint: #7b87a1;
+  --line: #2e3850;
+  --seal: #e8645a;
+  /* Survol : en sombre il s'éclaircit (le texte `on-seal` reste foncé). */
+  --seal-dark: #ee7a70;
+  --ok: #4fae7b;
+  --on-ink: #0f1522;
+  --on-seal: #10141f;
+  --on-ok: #0f1522;
+  /* Rampe inversée : le plus solide est le plus clair. */
+  --mastery-learning: #6b7898;
+  --mastery-known: #94a0bd;
+  --mastery-mastered: #c9d1e3;
+}
+
+@theme inline {
+  --color-snow: var(--snow);
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-seal: var(--seal);
+  --color-seal-dark: var(--seal-dark);
+  --color-ok: var(--ok);
+  --color-on-ink: var(--on-ink);
+  --color-on-seal: var(--on-seal);
+  --color-on-ok: var(--on-ok);
+}
+
+@theme {
   --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   /* Mincho (empattement) pour les caractères japonais : polices système, rien à télécharger. */
   --font-kana: 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', 'Noto Serif CJK JP', 'BIZ UDMincho',

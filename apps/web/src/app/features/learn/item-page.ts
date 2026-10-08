@@ -89,7 +89,7 @@ import { StrokeOrder } from './stroke-order';
                 <button
                   type="button"
                   (click)="confirmingRemoval.set(true)"
-                  class="self-start border border-ink px-5 py-3 font-medium hover:bg-ink hover:text-paper"
+                  class="self-start border border-ink px-5 py-3 font-medium hover:bg-ink hover:text-on-ink"
                 >
                   Retirer de mon dictionnaire
                 </button>
@@ -97,10 +97,10 @@ import { StrokeOrder } from './stroke-order';
                 <div class="flex flex-col gap-3 border-l-4 border-seal bg-paper p-4" role="group" aria-label="Confirmer le retrait">
                   <p>Retirer ce kanji efface ta progression dessus (l'historique de tes réponses reste). Continuer ?</p>
                   <div class="flex gap-3">
-                    <button type="button" [disabled]="busy()" (click)="toggleDictionary()" class="bg-seal px-5 py-2 font-medium text-paper hover:bg-seal-dark disabled:opacity-40">
+                    <button type="button" [disabled]="busy()" (click)="toggleDictionary()" class="bg-seal px-5 py-2 font-medium text-on-seal hover:bg-seal-dark disabled:opacity-40">
                       Retirer
                     </button>
-                    <button type="button" (click)="confirmingRemoval.set(false)" class="border border-ink px-5 py-2 font-medium hover:bg-ink hover:text-paper">
+                    <button type="button" (click)="confirmingRemoval.set(false)" class="border border-ink px-5 py-2 font-medium hover:bg-ink hover:text-on-ink">
                       Annuler
                     </button>
                   </div>
@@ -112,7 +112,7 @@ import { StrokeOrder } from './stroke-order';
                 type="button"
                 [disabled]="busy()"
                 (click)="toggleDictionary()"
-                class="self-start bg-ink px-6 py-3 text-lg font-medium text-paper hover:bg-ink/90 disabled:opacity-40"
+                class="self-start bg-ink px-6 py-3 text-lg font-medium text-on-ink hover:bg-ink/90 disabled:opacity-40"
               >
                 Ajouter à mon dictionnaire
               </button>

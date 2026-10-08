@@ -33,7 +33,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : 
               (click)="selectPeriod(period)"
               [attr.aria-pressed]="!isCustom() && currentDays() === period"
               class="border px-3 py-2 text-sm font-medium"
-              [class]="!isCustom() && currentDays() === period ? 'border-ink bg-ink text-paper' : 'border-line bg-paper hover:border-ink'"
+              [class]="!isCustom() && currentDays() === period ? 'border-ink bg-ink text-on-ink' : 'border-line bg-paper hover:border-ink'"
             >
               {{ periodLabels[period] }}
             </button>
@@ -44,7 +44,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : 
             [attr.aria-pressed]="isCustom()"
             [attr.aria-expanded]="customOpen()"
             class="border px-3 py-2 text-sm font-medium"
-            [class]="isCustom() ? 'border-ink bg-ink text-paper' : 'border-line bg-paper hover:border-ink'"
+            [class]="isCustom() ? 'border-ink bg-ink text-on-ink' : 'border-line bg-paper hover:border-ink'"
           >
             Dates…
           </button>
@@ -59,7 +59,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : 
               Au
               <input type="date" [value]="toDraft()" [max]="todayIso()" (input)="toDraft.set($any($event.target).value)" class="border border-line bg-paper px-3 py-2 text-base text-ink" />
             </label>
-            <button type="submit" [disabled]="!customValid()" class="bg-ink px-5 py-2.5 font-medium text-paper hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="submit" [disabled]="!customValid()" class="bg-ink px-5 py-2.5 font-medium text-on-ink hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40">
               Afficher
             </button>
           </form>

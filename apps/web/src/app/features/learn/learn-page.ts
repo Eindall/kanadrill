@@ -28,7 +28,7 @@ const TABS: ItemType[] = ['hiragana', 'katakana', 'kanji'];
             [attr.aria-selected]="script === selected()"
             (click)="selectTab(script)"
             class="border px-4 py-3 font-medium"
-            [class]="script === selected() ? 'border-ink bg-ink text-paper' : 'border-line bg-paper hover:border-ink'"
+            [class]="script === selected() ? 'border-ink bg-ink text-on-ink' : 'border-line bg-paper hover:border-ink'"
           >
             {{ labels[script] }}
           </button>

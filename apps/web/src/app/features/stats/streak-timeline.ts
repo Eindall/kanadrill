@@ -16,7 +16,7 @@ import { dayState, longDay, weekdayLetter } from './stats-helpers';
           <span class="flex h-10 items-center justify-center">
             @switch (day.state) {
               @case ('goal') {
-                <span class="flex size-10 items-center justify-center rounded-full bg-ok text-paper" [class]="ring(day.today)">
+                <span class="flex size-10 items-center justify-center rounded-full bg-ok text-on-ok" [class]="ring(day.today)">
                   <svg viewBox="0 0 24 24" class="size-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M8 4h8v5a4 4 0 0 1-8 0V4z" />
                     <path d="M8 6H5.5A1.5 1.5 0 0 0 4 7.5C4 9.5 5.5 11 8 11M16 6h2.5A1.5 1.5 0 0 1 20 7.5C20 9.5 18.5 11 16 11" />

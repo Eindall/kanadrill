@@ -5,10 +5,11 @@ import { filter, map } from 'rxjs';
 import { AppUpdateService } from '../core/app-update.service';
 import { AuthService } from '../core/auth.service';
 import { Logo } from './logo';
+import { ThemeToggle } from './theme-toggle';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterLink, RouterLinkActive, RouterOutlet, Logo],
+  imports: [RouterLink, RouterLinkActive, RouterOutlet, Logo, ThemeToggle],
   template: `
     <header class="border-b border-line bg-paper">
       <div class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-x-6 px-4 pt-3 sm:flex-nowrap sm:py-3">
@@ -32,10 +33,11 @@ import { Logo } from './logo';
         <div class="flex items-center gap-3">
           <!-- Pas pendant une session (« Quitter » est dans la session) ni sur l'écran de réglage : ce serait le même bouton -->
           @if (showNewSession()) {
-            <a routerLink="/review/new" class="whitespace-nowrap bg-seal px-4 py-2 text-sm font-medium text-paper hover:bg-seal-dark">
+            <a routerLink="/review/new" class="whitespace-nowrap bg-seal px-4 py-2 text-sm font-medium text-on-seal hover:bg-seal-dark">
               Nouvelle session
             </a>
           }
+          <app-theme-toggle />
           @if (auth.user(); as user) {
             <a routerLink="/profile" class="flex items-center gap-3" [attr.aria-label]="'Mon profil, ' + user.username">
               <span class="max-w-32 truncate text-sm text-ink-soft max-md:hidden">{{ user.username }}</span>
@@ -51,7 +53,7 @@ import { Logo } from './logo';
     </header>
 
     @if (update.updateReady()) {
-      <div role="status" class="bg-ink text-paper">
+      <div role="status" class="bg-ink text-on-ink">
         <div class="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 text-sm">
           <span>Une nouvelle version de KanaDrill est disponible.</span>
           <button type="button" (click)="update.apply()" class="shrink-0 font-medium underline underline-offset-4">

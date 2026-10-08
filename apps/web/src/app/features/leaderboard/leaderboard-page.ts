@@ -45,7 +45,7 @@ import { FlameIcon } from '../stats/flame-icon';
                   <span class="block truncate font-medium">
                     {{ entry.username }}
                     @if (entry.isMe) {
-                      <span class="ml-1 bg-ink px-2 py-0.5 text-xs font-medium text-paper">Toi</span>
+                      <span class="ml-1 bg-ink px-2 py-0.5 text-xs font-medium text-on-ink">Toi</span>
                     }
                   </span>
                   <span class="text-sm text-ink-soft">record : {{ days(entry.longestStreak) }}</span>

@@ -152,11 +152,11 @@ const OPTION =
           type="button"
           [disabled]="!canLaunch()"
           (click)="launch()"
-          class="bg-seal px-8 py-3 text-lg font-medium text-paper hover:bg-seal-dark disabled:cursor-not-allowed disabled:opacity-40"
+          class="bg-seal px-8 py-3 text-lg font-medium text-on-seal hover:bg-seal-dark disabled:cursor-not-allowed disabled:opacity-40"
         >
           Lancer la session
         </button>
-        <a routerLink="/" class="border border-ink px-6 py-3 text-center font-medium hover:bg-ink hover:text-paper">
+        <a routerLink="/" class="border border-ink px-6 py-3 text-center font-medium hover:bg-ink hover:text-on-ink">
           Annuler
         </a>
       </div>

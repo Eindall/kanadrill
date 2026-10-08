@@ -55,7 +55,7 @@ const LINK_ERRORS: Record<string, string> = {
             <button
               type="submit"
               [disabled]="username.invalid || username.pristine || saving()"
-              class="bg-ink px-6 py-3 font-medium text-paper transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+              class="bg-ink px-6 py-3 font-medium text-on-ink transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Enregistrer
             </button>
@@ -92,7 +92,7 @@ const LINK_ERRORS: Record<string, string> = {
             <button
               type="submit"
               [disabled]="goal.invalid || goal.pristine || goalSaving()"
-              class="bg-ink px-6 py-3 font-medium text-paper transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+              class="bg-ink px-6 py-3 font-medium text-on-ink transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Enregistrer
             </button>
@@ -146,7 +146,7 @@ const LINK_ERRORS: Record<string, string> = {
                     <p class="flex flex-wrap items-center gap-2">
                       <span class="font-medium">{{ item.device }}</span>
                       @if (item.current) {
-                        <span class="bg-ink px-2 py-0.5 text-xs font-medium text-paper">Cet appareil</span>
+                        <span class="bg-ink px-2 py-0.5 text-xs font-medium text-on-ink">Cet appareil</span>
                       }
                     </p>
                     <p class="text-sm text-ink-soft">Dernière activité : {{ relative(item.lastUsedAt) }}</p>
@@ -169,7 +169,7 @@ const LINK_ERRORS: Record<string, string> = {
                 type="button"
                 (click)="revokeOtherSessions()"
                 [disabled]="sessionsBusy()"
-                class="self-start border border-ink px-5 py-2.5 font-medium transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+                class="self-start border border-ink px-5 py-2.5 font-medium transition-colors hover:bg-ink hover:text-on-ink disabled:opacity-40"
               >
                 Déconnecter tous les autres appareils
               </button>
@@ -218,7 +218,7 @@ const LINK_ERRORS: Record<string, string> = {
                   type="button"
                   (click)="link(provider)"
                   [disabled]="linkBusy()"
-                  class="border border-ink px-5 py-2.5 font-medium transition-colors hover:bg-ink hover:text-paper disabled:opacity-40"
+                  class="border border-ink px-5 py-2.5 font-medium transition-colors hover:bg-ink hover:text-on-ink disabled:opacity-40"
                 >
                   Lier {{ providerLabel(provider) }}
                 </button>
@@ -231,7 +231,7 @@ const LINK_ERRORS: Record<string, string> = {
           <button
             type="button"
             (click)="logout()"
-            class="border border-ink px-6 py-3 font-medium transition-colors hover:bg-ink hover:text-paper"
+            class="border border-ink px-6 py-3 font-medium transition-colors hover:bg-ink hover:text-on-ink"
           >
             Se déconnecter
           </button>
@@ -245,7 +245,7 @@ const LINK_ERRORS: Record<string, string> = {
               <p id="delete-title" class="font-medium">Supprimer définitivement ton compte ?</p>
               <p class="text-sm text-ink-soft">Ton profil et tous tes résultats de révision seront effacés. Cette action est irréversible.</p>
               <div class="flex gap-3">
-                <button type="button" (click)="deleteAccount()" class="bg-seal px-5 py-2.5 font-medium text-paper hover:bg-seal-dark">
+                <button type="button" (click)="deleteAccount()" class="bg-seal px-5 py-2.5 font-medium text-on-seal hover:bg-seal-dark">
                   Supprimer mon compte
                 </button>
                 <button type="button" (click)="confirmingDelete.set(false)" class="px-5 py-2.5 font-medium">Annuler</button>

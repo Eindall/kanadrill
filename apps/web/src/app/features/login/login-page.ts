@@ -1,9 +1,12 @@
 import { Component, computed, input } from '@angular/core';
+import { ThemeToggle } from '../../layout/theme-toggle';
 import { loginErrorMessage } from './login-error';
 
 @Component({
   selector: 'app-login-page',
+  imports: [ThemeToggle],
   template: `
+    <div class="absolute top-0 right-0 p-3"><app-theme-toggle /></div>
     <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-10 px-6 py-12">
       <div class="relative size-44 shrink-0 self-start" aria-hidden="true">
         <div
@@ -12,7 +15,7 @@ import { loginErrorMessage } from './login-error';
           あ
         </div>
         <div
-          class="font-kana absolute right-0 bottom-0 flex size-14 rotate-[-5deg] items-center justify-center bg-seal text-3xl leading-none text-paper"
+          class="font-kana absolute right-0 bottom-0 flex size-14 rotate-[-5deg] items-center justify-center bg-seal text-3xl leading-none text-on-seal"
         >
           覚
         </div>

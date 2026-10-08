@@ -8,9 +8,9 @@ export interface MasteryRow {
 
 /** Du plus récent au plus solide : une seule teinte qui s'assombrit (validée en rampe ordinale) ; « pas encore vu » est le fond vide. */
 const SEGMENTS: ReadonlyArray<{ level: MasteryLevel; label: string; color: string }> = [
-  { level: 'mastered', label: 'Solides', color: '#1b2437' },
-  { level: 'known', label: 'Connus', color: '#55607a' },
-  { level: 'learning', label: 'En cours', color: '#9aa5bd' },
+  { level: 'mastered', label: 'Solides', color: 'var(--mastery-mastered)' },
+  { level: 'known', label: 'Connus', color: 'var(--mastery-known)' },
+  { level: 'learning', label: 'En cours', color: 'var(--mastery-learning)' },
   { level: 'unseen', label: 'Pas encore vus', color: 'var(--color-line)' },
 ];
 

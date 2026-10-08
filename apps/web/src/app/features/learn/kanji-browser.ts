@@ -40,7 +40,7 @@ const BIG_LEVEL = 300;
           class="min-w-0 flex-1 border border-line bg-paper px-4 py-3"
         />
         @if (q()) {
-          <button type="button" (click)="box.value = ''; search('')" class="border border-ink px-4 font-medium hover:bg-ink hover:text-paper">
+          <button type="button" (click)="box.value = ''; search('')" class="border border-ink px-4 font-medium hover:bg-ink hover:text-on-ink">
             Effacer
           </button>
         }
@@ -54,7 +54,7 @@ const BIG_LEVEL = 300;
             [attr.aria-selected]="!searching() && summary.level === level()"
             (click)="levelChange.emit(summary.level)"
             class="flex flex-col items-center border px-2 py-2"
-            [class]="!searching() && summary.level === level() ? 'border-ink bg-ink text-paper' : 'border-line bg-paper hover:border-ink'"
+            [class]="!searching() && summary.level === level() ? 'border-ink bg-ink text-on-ink' : 'border-line bg-paper hover:border-ink'"
           >
             <span class="font-medium">{{ labels[summary.level] }}</span>
             <span class="text-xs tabular-nums opacity-80">{{ summary.inDictionary }} / {{ summary.total }}</span>
@@ -78,7 +78,7 @@ const BIG_LEVEL = 300;
               <button
                 type="button"
                 (click)="confirming.set(true)"
-                class="border border-ink px-3 py-2 text-sm font-medium hover:bg-ink hover:text-paper"
+                class="border border-ink px-3 py-2 text-sm font-medium hover:bg-ink hover:text-on-ink"
               >
                 Tout ajouter à mon dictionnaire
               </button>
@@ -94,10 +94,10 @@ const BIG_LEVEL = 300;
                 <strong> : c'est beaucoup, tu peux aussi les ajouter un par un depuis leur fiche</strong>}.
             </p>
             <div class="flex gap-3">
-              <button type="button" [disabled]="adding()" (click)="addLevel()" class="bg-ink px-5 py-2 font-medium text-paper hover:bg-ink/90 disabled:opacity-40">
+              <button type="button" [disabled]="adding()" (click)="addLevel()" class="bg-ink px-5 py-2 font-medium text-on-ink hover:bg-ink/90 disabled:opacity-40">
                 Ajouter
               </button>
-              <button type="button" (click)="confirming.set(false)" class="border border-ink px-5 py-2 font-medium hover:bg-ink hover:text-paper">
+              <button type="button" (click)="confirming.set(false)" class="border border-ink px-5 py-2 font-medium hover:bg-ink hover:text-on-ink">
                 Annuler
               </button>
             </div>
@@ -130,7 +130,7 @@ const BIG_LEVEL = 300;
               type="button"
               [disabled]="loading()"
               (click)="loadMore()"
-              class="self-center border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-paper disabled:opacity-40"
+              class="self-center border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-on-ink disabled:opacity-40"
             >
               Afficher plus ({{ total() - items().length }} restants)
             </button>

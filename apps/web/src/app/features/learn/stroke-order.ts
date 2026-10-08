@@ -45,7 +45,7 @@ const MIN_STROKE_DELAY_S = 0.25;
       </svg>
 
       <div class="flex flex-wrap justify-center gap-3">
-        <button type="button" (click)="replay()" class="border border-ink px-5 py-2 font-medium hover:bg-ink hover:text-paper">
+        <button type="button" (click)="replay()" class="border border-ink px-5 py-2 font-medium hover:bg-ink hover:text-on-ink">
           Rejouer
         </button>
         <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-soft">

@@ -41,7 +41,7 @@ const MAX_POINTS_PER_STROKE = 1500;
             type="button"
             (click)="undo()"
             [disabled]="strokes().length === 0"
-            class="border border-ink px-4 py-2 text-sm font-medium hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-40"
+            class="border border-ink px-4 py-2 text-sm font-medium hover:bg-ink hover:text-on-ink disabled:cursor-not-allowed disabled:opacity-40"
           >
             Annuler le dernier trait
           </button>
@@ -49,7 +49,7 @@ const MAX_POINTS_PER_STROKE = 1500;
             type="button"
             (click)="clear()"
             [disabled]="strokes().length === 0"
-            class="border border-ink px-4 py-2 text-sm font-medium hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-40"
+            class="border border-ink px-4 py-2 text-sm font-medium hover:bg-ink hover:text-on-ink disabled:cursor-not-allowed disabled:opacity-40"
           >
             Effacer
           </button>

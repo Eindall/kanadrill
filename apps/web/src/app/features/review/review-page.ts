@@ -48,10 +48,10 @@ interface Feedback {
         <div role="alert" class="flex flex-col items-start gap-4 border-l-4 border-seal bg-paper p-5">
           <p class="font-medium">{{ errorMessage() }}</p>
           <div class="flex flex-wrap gap-3">
-            <button type="button" (click)="start()" class="bg-ink px-6 py-3 font-medium text-paper hover:bg-ink/90">
+            <button type="button" (click)="start()" class="bg-ink px-6 py-3 font-medium text-on-ink hover:bg-ink/90">
               Réessayer
             </button>
-            <a routerLink="/review/new" class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-paper">
+            <a routerLink="/review/new" class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-on-ink">
               Changer de réglage
             </a>
           </div>
@@ -108,17 +108,17 @@ interface Feedback {
           }
 
           <div class="flex flex-col gap-3 sm:flex-row">
-            <a routerLink="/" class="bg-ink px-6 py-3 text-center font-medium text-paper hover:bg-ink/90">
+            <a routerLink="/" class="bg-ink px-6 py-3 text-center font-medium text-on-ink hover:bg-ink/90">
               Retour à l'accueil
             </a>
             <button
               type="button"
               (click)="start()"
-              class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-paper"
+              class="border border-ink px-6 py-3 font-medium hover:bg-ink hover:text-on-ink"
             >
               Relancer la même session
             </button>
-            <a routerLink="/review/new" class="border border-ink px-6 py-3 text-center font-medium hover:bg-ink hover:text-paper">
+            <a routerLink="/review/new" class="border border-ink px-6 py-3 text-center font-medium hover:bg-ink hover:text-on-ink">
               Changer de réglage
             </a>
           </div>
@@ -227,7 +227,7 @@ interface Feedback {
                   <button
                     type="submit"
                     [disabled]="typed().trim() === ''"
-                    class="bg-ink px-8 py-4 text-lg font-medium text-paper hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+                    class="bg-ink px-8 py-4 text-lg font-medium text-on-ink hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Valider
                   </button>
@@ -239,7 +239,7 @@ interface Feedback {
                 type="button"
                 [disabled]="drawn().length === 0"
                 (click)="reveal()"
-                class="bg-ink px-8 py-4 text-lg font-medium text-paper hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
+                class="bg-ink px-8 py-4 text-lg font-medium text-on-ink hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Voir le modèle
               </button>
@@ -271,7 +271,7 @@ interface Feedback {
                 <button
                   type="button"
                   (click)="answer(proposed)"
-                  class="bg-ink px-6 py-4 text-lg font-medium text-paper hover:bg-ink/90"
+                  class="bg-ink px-6 py-4 text-lg font-medium text-on-ink hover:bg-ink/90"
                 >
                   Suivant
                 </button>
@@ -326,7 +326,7 @@ interface Feedback {
                   }
                   @if (f.saveError) {
                     <p role="alert" class="text-sm text-seal">Ta réponse n'a pas pu être enregistrée.</p>
-                    <button type="button" (click)="retry()" class="self-start bg-seal px-6 py-3 font-medium text-paper hover:bg-seal-dark">
+                    <button type="button" (click)="retry()" class="self-start bg-seal px-6 py-3 font-medium text-on-seal hover:bg-seal-dark">
                       Réessayer
                     </button>
                   } @else {
@@ -335,7 +335,7 @@ interface Feedback {
                       type="button"
                       [disabled]="f.saving"
                       (click)="next()"
-                      class="bg-ink px-6 py-3 text-lg font-medium text-paper hover:bg-ink/90 disabled:opacity-40"
+                      class="bg-ink px-6 py-3 text-lg font-medium text-on-ink hover:bg-ink/90 disabled:opacity-40"
                     >
                       Suivant
                     </button>
@@ -452,11 +452,11 @@ export class ReviewPage {
     const base = 'border-2 px-2 py-3 font-medium ';
     switch (answer) {
       case DRAWING_ANSWERS.wrong:
-        return base + 'border-seal text-seal hover:bg-seal hover:text-paper';
+        return base + 'border-seal text-seal hover:bg-seal hover:text-on-seal';
       case DRAWING_ANSWERS.fair:
-        return base + 'border-ink hover:bg-ink hover:text-paper';
+        return base + 'border-ink hover:bg-ink hover:text-on-ink';
       default:
-        return base + 'border-ok text-ok hover:bg-ok hover:text-paper';
+        return base + 'border-ok text-ok hover:bg-ok hover:text-on-ok';
     }
   }
 

@@ -4,6 +4,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { THEME_COLORS, THEME_STORAGE_KEY } from './app/core/theme';
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)));
 const readText = (path: string) => read(path).toString('utf8');
@@ -53,6 +54,25 @@ describe('index.html', () => {
     expect(html).toContain('<link rel="manifest" href="manifest.webmanifest"');
     expect(html).toContain('<link rel="apple-touch-icon" href="icons/apple-touch-icon.png"');
     expect(pngSize(read('../public/icons/apple-touch-icon.png'))).toBe('180x180');
+  });
+});
+
+describe('theme-init.js (anti-flash)', () => {
+  const html = readText('./index.html');
+  const script = readText('../public/theme-init.js');
+
+  it('est chargé de façon synchrone dans le <head>, sans script inline (CSP script-src \'self\')', () => {
+    const head = html.slice(0, html.indexOf('</head>'));
+    expect(head).toMatch(/<script src="theme-init\.js"><\/script>/);
+    expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
+    expect(head).not.toMatch(/<script[^>]*(async|defer|type="module")/);
+  });
+
+  it('utilise la même clé de stockage et les mêmes couleurs que le service de thème', () => {
+    expect(script).toContain(`'${THEME_STORAGE_KEY}'`);
+    expect(script).toContain(`'${THEME_COLORS.dark}'`);
+    expect(script).toContain(`'${THEME_COLORS.light}'`);
+    expect(html).toContain(`<meta name="theme-color" content="${THEME_COLORS.light}"`);
   });
 });
 
@@ -107,7 +127,7 @@ describe('nginx.conf', () => {
   it('ne met pas en cache le service worker, sa liste de fichiers et le manifest', () => {
     expect(swRule).not.toBeNull();
     const [, files, body] = swRule!;
-    for (const file of ['ngsw-worker\\.js', 'ngsw\\.json', 'safety-worker\\.js']) {
+    for (const file of ['ngsw-worker\\.js', 'ngsw\\.json', 'safety-worker\\.js', 'theme-init\\.js']) {
       expect(files).toContain(file);
     }
     expect(body).toContain('expires -1;');

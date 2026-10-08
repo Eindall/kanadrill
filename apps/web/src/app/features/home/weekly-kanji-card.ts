@@ -52,7 +52,7 @@ import { longDay } from '../stats/stats-helpers';
             type="button"
             [disabled]="adding()"
             (click)="add(k)"
-            class="self-start bg-ink px-6 py-3 font-medium text-paper hover:bg-ink/90 disabled:opacity-40"
+            class="self-start bg-ink px-6 py-3 font-medium text-on-ink hover:bg-ink/90 disabled:opacity-40"
           >
             Ajouter à mon dictionnaire
           </button>
