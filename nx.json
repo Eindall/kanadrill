@@ -60,5 +60,8 @@
       "style": "css",
       "unitTestRunner": "vitest-analog"
     }
+  },
+  "tui": {
+    "enabled": false
   }
 }
