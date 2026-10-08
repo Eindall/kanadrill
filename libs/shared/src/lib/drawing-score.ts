@@ -8,10 +8,21 @@ import type { StrokeDto } from './learning';
 export const DRAWING_SCORE = {
   /** Points par trait après rééchantillonnage. */
   samples: 32,
-  /** Écart moyen (sur l'ensemble des traits) jusqu'auquel un tracé est jugé juste. */
-  goodDistance: 7,
-  /** Écart d'un trait au-delà duquel il est jugé faux (entre les deux : le tracé est « approximatif »). */
+  /** Écart moyen d'un trait jusqu'auquel il vaut 100 points. */
+  perfectDistance: 6,
+  /** Écart moyen d'un trait à partir duquel il vaut 0 point (entre les deux : décroissance linéaire). */
+  zeroDistance: 30,
+  /** Note /100 du tracé (moyenne des traits) à partir de laquelle il est « juste ». */
+  goodScore: 88,
+  /** Note /100 à partir de laquelle il est « presque » ; en dessous, « faux ». */
+  fairScore: 60,
+  /**
+   * Un trait au-delà de cet écart est signalé (il s'éloigne du modèle) et, sert à reconnaître un trait qui en
+   * ressemble à un autre (ordre) ou qui est inversé (sens). Il n'est plus une faute en soi : seule la note compte.
+   */
   fairDistance: 15,
+  /** Un trait n'est « hors d'ordre » ou « inversé » que s'il ressemble à cette part (ou moins) de son écart à sa propre place. */
+  confusionRatio: 0.7,
   /** Un trait plus court ne permet pas de juger son sens (une inversion reste dans la tolérance). */
   minDirectionLength: 14,
   /** Le début d'un trait tracé à plus de cette distance du début du modèle, mais près de sa fin : sens inversé. */
@@ -31,10 +42,16 @@ export type DrawingIssue =
   | { type: 'shape'; stroke: number };
 
 export interface DrawingScore {
-  /** `good` : juste ; `fair` : bon ordre et bon sens, formes approximatives (écart moyen au-dessus de goodDistance) ; `wrong` : au moins une faute. */
+  /**
+   * Tiré de `score` : `good` (≥ goodScore), `fair` (≥ fairScore), sinon `wrong`. Un nombre de traits différent, un
+   * trait hors d'ordre ou inversé, ou un dessin trop petit valent 0 : toujours `wrong`.
+   */
   verdict: DrawingVerdict;
+  /** Précision du tracé, de 0 à 100 (0 si le nombre, l'ordre ou le sens des traits est faux). */
+  score: number;
+  /** Fautes structurelles (nombre, ordre, sens, taille) et traits qui s'éloignent du modèle (`shape`, informatif). */
   issues: DrawingIssue[];
-  /** Traits de l'utilisateur fautifs (pour les signaler sur le dessin). */
+  /** Traits de l'utilisateur à signaler sur le dessin (fautifs ou trop éloignés). */
   flagged: number[];
   /** Écart de chaque trait au modèle, rapporté à la tolérance (≤ goodDistance : juste). */
   distances: number[];
@@ -93,7 +110,7 @@ const meanDistance = (a: readonly Point2D[], b: readonly Point2D[]): number =>
  * faux, ordre (il ressemble à un autre trait du modèle). Le nombre de traits doit être exactement celui du modèle.
  */
 export function scoreDrawing(user: readonly (readonly Point2D[])[], model: readonly StrokeDto[]): DrawingScore {
-  const wrong = (issues: DrawingIssue[]): DrawingScore => ({ verdict: 'wrong', issues, flagged: [], distances: [] });
+  const wrong = (issues: DrawingIssue[]): DrawingScore => ({ verdict: 'wrong', score: 0, issues, flagged: [], distances: [] });
   if (user.length !== model.length || model.length === 0) {
     return wrong([{ type: 'strokeCount', expected: model.length, actual: user.length }]);
   }
@@ -131,25 +148,38 @@ export function scoreDrawing(user: readonly (readonly Point2D[])[], model: reado
 
     const reversed = [...stroke].reverse();
     const longEnough = lengths[i] >= DRAWING_SCORE.minDirectionLength;
+    const reversedFit = meanDistance(reversed, target) / tolerance[i];
     const startsAtEnd =
       longEnough &&
+      reversedFit < forward * DRAWING_SCORE.confusionRatio &&
       dist(stroke[0], target[0]) > DRAWING_SCORE.startTolerance * tolerance[i] &&
       dist(stroke[0], target[target.length - 1]) < dist(stroke[0], target[0]);
 
     if (startsAtEnd) {
       issues.push({ type: 'direction', stroke: i });
     } else if (forward > fair) {
-      const resemblesAnother = modelStrokes.some((other, j) => j !== i && meanDistance(stroke, other) / tolerance[j] <= fair);
+      // Hors d'ordre ou inversé seulement si le trait ressemble CLAIREMENT mieux à un autre trait (ou au sien à
+      // l'envers) qu'à sa place : un trait simplement brouillon n'est pas une faute d'ordre ni de sens.
+      const clearly = (distance: number) => distance <= fair && distance <= forward * DRAWING_SCORE.confusionRatio;
+      const resemblesAnother = modelStrokes.some((other, j) => j !== i && clearly(meanDistance(stroke, other) / tolerance[j]));
       if (resemblesAnother) issues.push({ type: 'order', stroke: i });
-      else if (longEnough && meanDistance(reversed, target) / tolerance[i] <= fair) issues.push({ type: 'direction', stroke: i });
+      else if (longEnough && clearly(reversedFit)) issues.push({ type: 'direction', stroke: i });
       else issues.push({ type: 'shape', stroke: i });
     }
   });
 
   const flagged = issues.flatMap((issue) => ('stroke' in issue ? [issue.stroke] : []));
-  // « Juste » se juge sur l'écart moyen des traits (un kanji à 15 traits n'est pas « approximatif » pour un seul trait
-  // un peu faible) ; aucun trait ne dépasse de toute façon `fairDistance`, sinon il y a une faute.
-  const mean = distances.reduce((sum, d) => sum + d, 0) / distances.length;
-  const verdict: DrawingVerdict = issues.length > 0 ? 'wrong' : mean > DRAWING_SCORE.goodDistance ? 'fair' : 'good';
-  return { verdict, issues, flagged, distances };
+  // Un trait mal placé dans l'ordre ou inversé vaut une note nulle pour tout le tracé.
+  if (issues.some((issue) => issue.type === 'order' || issue.type === 'direction')) {
+    return { verdict: 'wrong', score: 0, issues, flagged, distances };
+  }
+  // Sinon : la note est la moyenne de celle de chaque trait, selon son écart au modèle. Un trait très éloigné ne
+  // condamne plus à lui seul le tracé (il pèse 1 / N), mais il est signalé.
+  const { perfectDistance, zeroDistance, goodScore, fairScore } = DRAWING_SCORE;
+  const strokeScore = (d: number) => Math.min(1, Math.max(0, (zeroDistance - d) / (zeroDistance - perfectDistance)));
+  const score = Math.round((100 * distances.reduce((sum, d) => sum + strokeScore(d), 0)) / distances.length);
+  // Un trait signalé comme éloigné du modèle empêche le « juste », même noyé dans un grand kanji.
+  const verdict: DrawingVerdict =
+    score >= goodScore && issues.length === 0 ? 'good' : score >= fairScore ? 'fair' : 'wrong';
+  return { verdict, score, issues, flagged, distances };
 }

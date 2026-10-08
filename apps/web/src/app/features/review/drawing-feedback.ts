@@ -33,9 +33,10 @@ function describeIssue(issue: DrawingIssue): string {
 
 /** Explications affichées sous la comparaison, en français. */
 export function describeScore(score: DrawingScore): string[] {
-  if (score.verdict === 'good') return ['Les formes, l\'ordre et le sens des traits sont corrects.'];
+  const far = score.issues.filter((issue) => issue.type === 'shape').map(describeIssue);
+  if (score.verdict === 'good') return ['Les formes, l\'ordre et le sens des traits sont corrects.', ...far];
   if (score.verdict === 'fair') {
-    return ['Bon ordre et bon sens, mais certaines formes restent approximatives : compare avec le modèle.'];
+    return ['Bon ordre et bon sens, mais certaines formes restent approximatives : compare avec le modèle.', ...far];
   }
   return score.issues.map(describeIssue);
 }

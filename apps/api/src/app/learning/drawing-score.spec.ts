@@ -96,6 +96,7 @@ describe('scoreDrawing', () => {
       const score = scoreDrawing(userDrawing(kana.metadata.strokes, random), kana.metadata.strokes);
       expect([kana.character, score.verdict]).toEqual([kana.character, 'good']);
       expect(score.issues).toEqual([]);
+      expect(score.score).toBe(100);
     }
   });
 
@@ -183,20 +184,24 @@ describe('scoreDrawing', () => {
     }
   });
 
-  it('refuse presque toujours un autre kana (de même nombre de traits)', () => {
+  it('refuse presque toujours un autre kana (de même nombre de traits), ne le juge jamais « juste »', () => {
     const random = rng(8);
     let total = 0;
     let accepted = 0;
+    let good = 0;
     for (const target of KANA.filter((kana) => kana.type === 'hiragana')) {
       for (const other of KANA.filter((kana) => kana.type === 'hiragana')) {
         if (other === target || other.metadata.strokes.length !== target.metadata.strokes.length) continue;
         total++;
         const drawing = userDrawing(other.metadata.strokes, random, { warp: 3, jitter: 1, scale: 0.8 });
-        if (scoreDrawing(drawing, target.metadata.strokes).verdict !== 'wrong') accepted++;
+        const { verdict } = scoreDrawing(drawing, target.metadata.strokes);
+        if (verdict !== 'wrong') accepted++;
+        if (verdict === 'good') good++;
       }
     }
-    // Seules passent les paires qui se ressemblent vraiment (ね / ぬ, る / ろ, れ / わ…).
-    expect(share(accepted, total)).toBeLessThan(0.02);
+    // Un autre kana peut au pire valoir « Presque » (ね / ぬ, る / ろ, れ / わ…), presque jamais « Juste ».
+    expect(share(accepted, total)).toBeLessThan(0.06);
+    expect(share(good, total)).toBeLessThan(0.01);
   });
 
   it('refuse un dessin trop petit pour être jugé', () => {
@@ -208,6 +213,58 @@ describe('scoreDrawing', () => {
   it('refuse un dessin vide', () => {
     const { strokes } = KANA[0].metadata;
     expect(scoreDrawing([], strokes).verdict).toBe('wrong');
+  });
+});
+
+describe('note /100', () => {
+  it('vaut 0 dès que le nombre, l\'ordre ou le sens des traits est faux', () => {
+    const random = rng(30);
+    const { strokes } = MULTI[0].metadata;
+    expect(scoreDrawing(userDrawing(strokes.slice(1), random), strokes).score).toBe(0);
+    expect(scoreDrawing([], strokes).score).toBe(0);
+    expect(scoreDrawing(userDrawing(strokes, random, { scale: 0.1 }), strokes).score).toBe(0);
+    for (const kana of MULTI) {
+      const order = kana.metadata.strokes.map((_, i) => i);
+      [order[0], order[1]] = [order[1], order[0]];
+      expect(scoreDrawing(userDrawing(kana.metadata.strokes, random, { order }), kana.metadata.strokes).score).toBe(0);
+    }
+  });
+
+  it('baisse avec l\'imprécision, et le verdict suit les seuils', () => {
+    const { strokes } = KANA.find((kana) => kana.character === 'ま')!.metadata;
+    const scores = [0, 3, 6, 9, 12].map((warp) => scoreDrawing(userDrawing(strokes, rng(31), { warp }), strokes));
+    expect(scores[0].score).toBe(100);
+    for (let i = 1; i < scores.length; i++) expect(scores[i].score).toBeLessThanOrEqual(scores[i - 1].score);
+    for (const { score, verdict } of scores) {
+      if (score > 0) {
+        expect(verdict).toBe(score >= DRAWING_SCORE.goodScore ? 'good' : score >= DRAWING_SCORE.fairScore ? 'fair' : 'wrong');
+      }
+    }
+  });
+
+  it('un seul trait éloigné, sur un tracé par ailleurs correct, donne « presque » (jamais « juste », rarement « faux »)', () => {
+    const random = rng(32);
+    const dense = loadKanjiRecords().filter((kanji) => kanji.strokes.length >= 8 && kanji.jlpt !== null && kanji.jlpt >= 4);
+    const tally = { good: 0, fair: 0, wrong: 0 };
+    for (const kanji of dense) {
+      const drawing = userDrawing(kanji.strokes, random);
+      const all = drawing.flat();
+      const [minX, maxX] = [Math.min(...all.map((p) => p[0])), Math.max(...all.map((p) => p[0]))];
+      const [minY, maxY] = [Math.min(...all.map((p) => p[1])), Math.max(...all.map((p) => p[1]))];
+      // Un trait strictement intérieur : le décaler ne change pas la boîte englobante, donc le recadrage du dessin.
+      const inner = drawing.findIndex((stroke) => stroke.every(([x, y]) => x > minX + 6 && x < maxX - 6 && y > minY + 6 && y < maxY - 6));
+      if (inner < 0) continue;
+      drawing[inner] = drawing[inner].map(([x, y]): Point2D => [x + 18, y]);
+      const result = scoreDrawing(drawing, kanji.strokes);
+      tally[result.verdict]++;
+      if (result.issues.length > 0 && result.verdict === 'fair') expect(result.flagged).toContain(inner);
+    }
+    const total = tally.good + tally.fair + tally.wrong;
+    expect(total).toBeGreaterThan(50);
+    expect(tally.fair / total).toBeGreaterThan(0.7);
+    // Les « faux » restants : le trait décalé tombe sur un autre trait du modèle, donc se lit comme hors d'ordre.
+    expect(tally.wrong / total).toBeLessThan(0.3);
+    expect(tally.good / total).toBeLessThan(0.1);
   });
 });
 
@@ -243,7 +300,7 @@ describe('scoreDrawing sur les kanji (N5 à N3 : plus de traits, plus denses)', 
 
     const tally = { good: 0, fair: 0, wrong: 0 };
     for (const kanji of KANJI) tally[scoreDrawing(userDrawing(kanji.strokes, random, { warp: 5, jitter: 1 }), kanji.strokes).verdict]++;
-    expect(share(tally.wrong, KANJI.length)).toBeLessThan(0.25); // sur un kanji dense, un seul trait trop loin suffit
+    expect(share(tally.wrong, KANJI.length)).toBeLessThan(0.05); // un trait trop loin ne suffit plus à condamner un kanji dense
     expect(tally.fair).toBeGreaterThan(0);
   });
 
@@ -270,14 +327,18 @@ describe('scoreDrawing sur les kanji (N5 à N3 : plus de traits, plus denses)', 
     const sameCount = (strokes: readonly StrokeDto[]) => KANJI.filter((other) => other.strokes.length === strokes.length);
     let total = 0;
     let accepted = 0;
+    let good = 0;
     for (const target of KANJI) {
       const candidates = sameCount(target.strokes).filter((other) => other !== target);
       for (let attempt = 0; attempt < 3 && candidates.length > 0; attempt++) {
         const other = candidates[Math.floor(random() * candidates.length)];
         total++;
-        if (scoreDrawing(userDrawing(other.strokes, random, { warp: 3, jitter: 1, scale: 0.8 }), target.strokes).verdict !== 'wrong') accepted++;
+        const { verdict } = scoreDrawing(userDrawing(other.strokes, random, { warp: 3, jitter: 1, scale: 0.8 }), target.strokes);
+        if (verdict !== 'wrong') accepted++;
+        if (verdict === 'good') good++;
       }
     }
-    expect(share(accepted, total)).toBeLessThan(0.01); // seules passent des paires quasi identiques (八 / 入, 牛 / 午)
+    expect(share(accepted, total)).toBeLessThan(0.02); // seules passent des paires quasi identiques (八 / 入, 牛 / 午)
+    expect(share(good, total)).toBeLessThan(0.005);
   });
 });

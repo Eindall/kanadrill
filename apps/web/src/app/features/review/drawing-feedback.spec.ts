@@ -3,6 +3,7 @@ import { describeScore, suggestedAnswer } from './drawing-feedback';
 
 const score = (verdict: DrawingScore['verdict'], issues: DrawingScore['issues'] = []): DrawingScore => ({
   verdict,
+  score: verdict === 'good' ? 95 : verdict === 'fair' ? 70 : 0,
   issues,
   flagged: [],
   distances: [],
@@ -20,6 +21,12 @@ describe('describeScore', () => {
   it('explique un tracé juste ou approximatif', () => {
     expect(describeScore(score('good'))[0]).toContain('corrects');
     expect(describeScore(score('fair'))[0]).toContain('approximatives');
+  });
+
+  it('ajoute les traits éloignés à un verdict « presque »', () => {
+    const messages = describeScore(score('fair', [{ type: 'shape', stroke: 3 }]));
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toBe('Le trait 4 s\'éloigne du modèle.');
   });
 
   it('numérote les traits à partir de 1 et décrit chaque faute', () => {
