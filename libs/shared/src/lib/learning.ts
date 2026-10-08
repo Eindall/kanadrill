@@ -1,3 +1,4 @@
+import type { Point2D } from './svg-path';
 /** Types d'éléments à apprendre. Ajouter ici pour en introduire un nouveau. */
 export const ITEM_TYPES = ['hiragana', 'katakana', 'kanji'] as const;
 export type ItemType = (typeof ITEM_TYPES)[number];
@@ -234,12 +235,23 @@ export interface ReviewOverviewDto {
   dailyGoal: number;
 }
 
+/** Limites d'un dessin envoyé avec une réponse de tracé (le client allège ses traits en conséquence). */
+export const MAX_DRAWING_STROKES = 40;
+export const MAX_DRAWING_STROKE_POINTS = 400;
+export const MAX_DRAWING_POINTS = 4000;
+
 export interface SubmitReviewRequest {
   itemId: string;
   mode: ReviewMode;
   /** Romaji saisi, proposition choisie au QCM (le caractère choisi, à l'envers), ou verdict du tracé (`DRAWING_ANSWERS`). */
   answer: string;
   durationMs: number;
+  /**
+   * Au tracé seulement : le dessin de l'utilisateur (repère 109 × 109 de KanjiVG, un tableau de points par trait).
+   * Le **serveur recalcule la précision** (`scoreDrawing`, la même fonction que sur l'appareil) pour le classement
+   * « Tracé » ; le dessin n'est **pas conservé**. Optionnel : sans lui, la réponse compte mais ne rapporte pas de points.
+   */
+  strokes?: Point2D[][];
 }
 
 export interface ReviewResultDto {

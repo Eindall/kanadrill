@@ -1,6 +1,6 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import type { LeaderboardDto, StatsDto, StatsOverviewDto } from '@kanadrill/shared';
+import type { LeaderboardDto, StatsDto, StatsOverviewDto, WeeklyLeaderboardDto, WeeklyMetric } from '@kanadrill/shared';
 import { firstValueFrom } from 'rxjs';
 
 /** Période demandée : un nombre de jours jusqu'à aujourd'hui, ou une plage de dates (`to` : aujourd'hui par défaut). */
@@ -26,5 +26,9 @@ export class StatsService {
 
   loadLeaderboard(): Promise<LeaderboardDto> {
     return firstValueFrom(this.http.get<LeaderboardDto>('/api/leaderboard'));
+  }
+
+  loadWeeklyLeaderboard(metric: WeeklyMetric): Promise<WeeklyLeaderboardDto> {
+    return firstValueFrom(this.http.get<WeeklyLeaderboardDto>('/api/leaderboard/weekly', { params: { metric } }));
   }
 }

@@ -14,6 +14,10 @@ import {
   type ReviewOverviewDto,
   type ReviewResultDto,
   type ReviewSessionDto,
+  flattenPath,
+  resample,
+  type Point2D,
+  type StrokeDto,
 } from '@kanadrill/shared';
 import { AppModule } from '../app.module';
 import { assertTestDatabase } from '../testing/assert-test-database';
@@ -170,6 +174,54 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     // Ce que l'utilisateur « écrit » n'a pas de sens au tracé : seul le verdict compte.
     const other = (await (await answer(cookieD, await itemId('ほ'), 'ho', 'drawing', 9000)).json()) as ReviewResultDto;
     expect(other.correct).toBe(false);
+  });
+
+  it('recalcule la précision d\'un tracé d\'après le dessin envoyé, sans croire le client', async () => {
+    const erin = await dataSource.getRepository(User).save({ username: 'erin', avatarUrl: null });
+    const cookieE = await loginAs(erin.id);
+    const strokesOf = async (character: string) =>
+      (await dataSource.query(`SELECT metadata->'strokes' AS strokes FROM items WHERE type = 'hiragana' AND character = $1`, [character]))[0].strokes as StrokeDto[];
+    const copy = (strokes: StrokeDto[], shift = 0): Point2D[][] => strokes.map((stroke) => resample(flattenPath(stroke.d), 40).map(([x, y]): Point2D => [x + shift, y]));
+    const send = (id: string, mode: string, body: Record<string, unknown>) =>
+      call(cookieE, 'POST', '/reviews', { itemId: id, mode, answer: mode === 'drawing' ? 'correct' : 'ma', durationMs: 5000, ...body });
+    const stored = async () =>
+      (await dataSource.query(`SELECT drawing_precision AS p FROM review_logs WHERE user_id = $1 ORDER BY reviewed_at`, [erin.id])).map((row: { p: number | null }) => row.p);
+
+    // Un dessin fidèle vaut 100 ; un dessin d'un AUTRE kana vaut peu, même si le client annonce « correct ».
+    expect((await send(await itemId('ま'), 'drawing', { strokes: copy(await strokesOf('ま'), 5) })).status).toBe(200);
+    expect((await send(await itemId('む'), 'drawing', { strokes: copy(await strokesOf('ほ')) })).status).toBe(200);
+    // Sans dessin (ancien client) : la réponse compte, mais pas de points.
+    expect((await send(await itemId('ね'), 'drawing', {})).status).toBe(200);
+    const scores = await stored();
+    expect(scores[0]).toBe(100);
+    expect(scores[1]).toBeLessThan(60);
+    expect(scores[2]).toBeNull();
+    // Le client ne peut pas imposer la précision : le champ n'existe plus.
+    expect((await send(await itemId('ほ'), 'drawing', { precision: 100 })).status).toBe(400);
+  });
+
+  it('refuse un dessin mal formé, trop gros, ou envoyé hors tracé', async () => {
+    const erin = await dataSource.getRepository(User).save({ username: 'frank', avatarUrl: null });
+    const cookieE = await loginAs(erin.id);
+    const id = await itemId('ま');
+    const send = (mode: string, strokes: unknown) =>
+      call(cookieE, 'POST', '/reviews', { itemId: id, mode, answer: mode === 'drawing' ? 'correct' : 'ma', durationMs: 5000, strokes });
+    const line = (n: number) => Array.from({ length: n }, (_, i) => [i % 100, 5]);
+    const bad: Array<[string, unknown]> = [
+      ['vide', []],
+      ['trait vide', [[]]],
+      ['pas un tableau', 'trait'],
+      ['point à 3 valeurs', [[[1, 2, 3]]]],
+      ['texte', [[['a', 2]]]],
+      ['infini', [[[1e999, 2]]]],
+      ['hors limites', [[[99999, 2]]]],
+      ['trop de traits', Array.from({ length: 41 }, () => line(2))],
+      ['trop de points par trait', [line(401)]],
+      ['trop de points en tout', Array.from({ length: 11 }, () => line(400))],
+    ];
+    for (const [name, strokes] of bad) expect([name, (await send('drawing', strokes)).status]).toEqual([name, 400]);
+    // Hors tracé : le dessin n'a pas de sens.
+    expect((await send('typing', [line(3)])).status).toBe(400);
   });
 
   it('propose le QCM inversé : les caractères à choisir, sans lecture ambiguë', async () => {

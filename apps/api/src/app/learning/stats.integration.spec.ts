@@ -11,13 +11,14 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { DataSource } from 'typeorm';
-import { CARD_STATE, type IsoDay, type LeaderboardDto, type StatsDto, type StatsOverviewDto } from '@kanadrill/shared';
+import { CARD_STATE, type IsoDay, type LeaderboardDto, type StatsDto, type StatsOverviewDto, type WeeklyLeaderboardDto, type WeeklyMetric } from '@kanadrill/shared';
 import { AppModule } from '../app.module';
 import { assertTestDatabase } from '../testing/assert-test-database';
 import { SESSION_COOKIE } from '../auth/session';
 import { SessionService } from '../auth/session.service';
 import { User } from '../users/user.entity';
 import { shiftDay, StatsService } from './stats.service';
+import { mondayOf } from './weekly-kanji.service';
 
 const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
 
@@ -53,6 +54,14 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     for (const offset of offsets) await answer(userId, character, day(offset));
   };
 
+  /** Un tracé fait le jour `date` à `time` : précision annoncée et note (1 = raté, 2+ = compté). */
+  const drawn = (userId: string, date: IsoDay, time: string, precision: number | null, rating = 3) =>
+    dataSource.query(
+      `INSERT INTO review_logs (user_id, item_id, rating, duration_ms, reviewed_at, drawing_precision, state, due, stability, difficulty, elapsed_days, last_elapsed_days, scheduled_days, learning_steps)
+       VALUES ($1, $2, $3, 2000, ($4::date + $5::time) AT TIME ZONE 'Europe/Paris', $6, 0, now(), 0, 0, 0, 0, 0, 0)`,
+      [userId, itemIds['あ'], rating, date, time, precision],
+    );
+
   beforeAll(async () => {
     Object.assign(process.env, {
       DATABASE_URL: TEST_DATABASE_URL,
@@ -81,7 +90,7 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
   afterAll(async () => app?.close());
 
   it('exige une session', async () => {
-    for (const path of ['/stats', '/stats/overview', '/leaderboard']) {
+    for (const path of ['/stats', '/stats/overview', '/leaderboard', '/leaderboard/weekly?metric=answers']) {
       expect([path, (await call(undefined, 'GET', path)).status]).toEqual([path, 401]);
     }
   });
@@ -278,6 +287,92 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       expect((await get<{ leaderboardVisible: boolean }>(cookie, '/users/me')).leaderboardVisible).toBe(false);
       await call(cookie, 'PATCH', '/users/me', { leaderboardVisible: true });
       expect((await get<LeaderboardDto>(cookie, '/leaderboard')).me.rank).not.toBeNull();
+    });
+  });
+
+  describe('classements de la semaine', () => {
+    const weekly = (cookie: string, metric: WeeklyMetric) => get<WeeklyLeaderboardDto>(cookie, `/leaderboard/weekly?metric=${metric}`);
+
+    it('valide le paramètre', async () => {
+      const { cookie } = await makeUser('hebdo-validation');
+      for (const query of ['', '?metric=streak', '?metric=answers&extra=1']) {
+        expect([query, (await call(cookie, 'GET', `/leaderboard/weekly${query}`)).status]).toEqual([query, 400]);
+      }
+    });
+
+    it('compte les réponses du lundi (00:00, heure de Paris) au dimanche, pas celles de la semaine passée', async () => {
+      await dataSource.query('TRUNCATE users CASCADE');
+      const monday = mondayOf(today);
+      const alice = await makeUser('alice');
+      const bob = await makeUser('bob');
+      const carol = await makeUser('carol');
+      const eve = await makeUser('eve');
+      // alice : 3 cette semaine (dont une à minuit pile le lundi), dont 1 ratée ; 5 la semaine dernière (ignorées).
+      await answer(alice.user.id, 'あ', monday, '00:00:00');
+      await answer(alice.user.id, 'あ', monday, '12:00', 1);
+      await answer(alice.user.id, 'い', monday, '18:00');
+      for (let i = 0; i < 5; i++) await answer(alice.user.id, 'あ', shiftDay(monday, -1), '23:59:59');
+      // bob : 3 également (égalité de rang), toutes réussies.
+      await answer(bob.user.id, 'あ', monday, '09:00');
+      await answer(bob.user.id, 'い', monday, '10:00', 4);
+      await answer(bob.user.id, 'う', monday, '11:00', 2);
+      // carol : 5.
+      for (let i = 0; i < 5; i++) await answer(carol.user.id, 'あ', monday, `0${i + 1}:00`);
+      // eve : 9 mais masquée.
+      for (let i = 0; i < 9; i++) await answer(eve.user.id, 'あ', monday, `0${i + 1}:30`);
+      await call(eve.cookie, 'PATCH', '/users/me', { leaderboardVisible: false });
+
+      const board = await weekly(alice.cookie, 'answers');
+      expect(board).toMatchObject({ metric: 'answers', weekStart: monday, nextWeekStart: shiftDay(monday, 7) });
+      expect(board.entries.map((e) => [e.rank, e.username, e.value, e.detail, e.isMe])).toEqual([
+        [1, 'carol', 5, 100, false],
+        [2, 'alice', 3, 67, true],
+        [2, 'bob', 3, 100, false],
+      ]);
+      expect(board.me).toEqual({ rank: 2, value: 3, detail: 67, visible: true });
+      expect(board.total).toBe(3);
+      expect(JSON.stringify(board)).not.toContain('eve');
+      expect(JSON.stringify(board)).not.toContain(eve.user.id);
+      expect((await weekly(eve.cookie, 'answers')).me).toEqual({ rank: null, value: 9, detail: 100, visible: false });
+    });
+
+    it('classe les points de tracé : somme des précisions des tracés réussis, les ratés valent 0, les tracés sans précision ne comptent pas', async () => {
+      await dataSource.query('TRUNCATE users CASCADE');
+      const monday = mondayOf(today);
+      const alice = await makeUser('alice');
+      const bob = await makeUser('bob');
+      const carol = await makeUser('carol');
+      const dave = await makeUser('dave');
+      await drawn(alice.user.id, monday, '10:00', 90); // 90
+      await drawn(alice.user.id, monday, '11:00', 70, 2); // « presque » : 70
+      await drawn(alice.user.id, monday, '12:00', 30, 1); // raté (corrigé à la main) : 0 point, mais un tracé de plus
+      await drawn(alice.user.id, shiftDay(monday, -3), '12:00', 100); // semaine passée : ignoré
+      await drawn(bob.user.id, monday, '10:00', 100); // 100 en un seul tracé
+      await drawn(bob.user.id, monday, '10:30', null); // sans précision : ignoré
+      await answer(bob.user.id, 'あ', monday, '11:00'); // un QCM : ne compte pas non plus ici
+      await drawn(carol.user.id, monday, '10:00', 0, 1); // 0 point : hors classement
+      await drawn(dave.user.id, monday, '10:00', 160 - 60); // 100 : égalité avec bob
+
+      const board = await weekly(alice.cookie, 'drawing');
+      expect(board.entries.map((e) => [e.rank, e.username, e.value, e.detail])).toEqual([
+        [1, 'alice', 160, 3],
+        [2, 'bob', 100, 1],
+        [2, 'dave', 100, 1],
+      ]);
+      expect(board.me).toEqual({ rank: 1, value: 160, detail: 3, visible: true });
+      expect((await weekly(carol.cookie, 'drawing')).me).toEqual({ rank: null, value: 0, detail: 1, visible: true });
+    });
+
+    it('applique l\'option de masquage du classement des séries aux classements de la semaine', async () => {
+      await dataSource.query('TRUNCATE users CASCADE');
+      const monday = mondayOf(today);
+      const { user, cookie } = await makeUser('masquable');
+      await drawn(user.id, monday, '10:00', 80);
+      expect((await weekly(cookie, 'drawing')).me.rank).toBe(1);
+      await call(cookie, 'PATCH', '/users/me', { leaderboardVisible: false });
+      const hidden = await weekly(cookie, 'drawing');
+      expect(hidden.entries).toEqual([]);
+      expect(hidden.me).toEqual({ rank: null, value: 80, detail: 1, visible: false });
     });
   });
 });

@@ -17,7 +17,7 @@ import {
 import { ReviewService } from '../../core/review.service';
 import { describeScore, suggestedAnswer, VERDICT_TITLES, type DrawingAnswer } from './drawing-feedback';
 import { DrawingPad } from './drawing-pad';
-import type { Point } from './drawing-path';
+import { thinStrokes, type Point } from './drawing-path';
 import { StrokeOrder } from '../learn/stroke-order';
 import { advanceQueue, summarize, toQueue, type Attempt, type QueueEntry } from './review-queue';
 import { configFromParams, TYPE_LABELS } from './session-config';
@@ -261,7 +261,12 @@ interface Feedback {
                   [class.border-ink]="result.verdict === 'fair'"
                   [class.border-seal]="result.verdict === 'wrong'"
                 >
-                  <p class="font-semibold">{{ verdictTitles[result.verdict] }}</p>
+                  <p class="font-semibold">
+                    {{ verdictTitles[result.verdict] }}
+                    @if (result.score > 0) {
+                      <span class="font-normal text-ink-soft">· précision {{ result.score }}/100</span>
+                    }
+                  </p>
                   @for (message of describe(result); track message) {
                     <p class="text-sm text-ink-soft">{{ message }}</p>
                   }
@@ -365,6 +370,8 @@ export class ReviewPage {
   protected readonly typed = signal('');
   /** Traits dessinés à la carte « tracé » en cours. */
   protected readonly drawn = signal<Point[][]>([]);
+  /** Le dessin allégé, figé à « Voir le modèle » : celui qui est comparé et envoyé. */
+  private sentDrawing: Point[][] = [];
   /** Résultat de la comparaison tracé / modèle (au tracé, une fois le modèle affiché). */
   protected readonly score = signal<DrawingScore | null>(null);
   protected readonly suggestion = computed(() => {
@@ -411,6 +418,7 @@ export class ReviewPage {
     this.feedback.set(null);
     this.typed.set('');
     this.drawn.set([]);
+    this.sentDrawing = [];
     this.score.set(null);
     try {
       const session = await this.reviews.loadSession(this.config);
@@ -490,7 +498,9 @@ export class ReviewPage {
   protected reveal(): void {
     if (this.phase() !== 'question' || this.drawn().length === 0) return;
     this.revealedAt = performance.now();
-    this.score.set(scoreDrawing(this.drawn(), this.card()?.strokes ?? []));
+    // Le même dessin allégé sert à la comparaison locale et à l'envoi : l'appareil et le serveur jugent pareil.
+    this.sentDrawing = thinStrokes(this.drawn());
+    this.score.set(scoreDrawing(this.sentDrawing, this.card()?.strokes ?? []));
     this.phase.set('compare');
   }
 
@@ -500,6 +510,8 @@ export class ReviewPage {
     if (!entry || (phase !== 'question' && phase !== 'compare')) return;
     const card = entry.card;
     const durationMs = Math.round((card.mode === 'drawing' ? this.revealedAt : performance.now()) - this.shownAt);
+    // Au tracé, on envoie le dessin : le serveur recalcule la précision (classement « Tracé ») et ne le conserve pas.
+    const strokes = card.mode === 'drawing' && this.sentDrawing.length > 0 ? this.sentDrawing : undefined;
 
     // Retour immédiat avec la même logique que le serveur ; la réponse du serveur fait foi ensuite.
     this.feedback.set({
@@ -514,7 +526,7 @@ export class ReviewPage {
     this.pendingSave = async () => {
       this.feedback.update((f) => f && { ...f, saving: true, saveError: false });
       try {
-        const result = await this.reviews.submit({ itemId: card.item.id, mode: card.mode, answer: text, durationMs });
+        const result = await this.reviews.submit({ itemId: card.item.id, mode: card.mode, answer: text, durationMs, ...(strokes ? { strokes } : {}) });
         this.attempts.update((list) => [
           ...list,
           { key: entry.key, card, correct: result.correct, expected: result.expected, durationMs, nextDue: result.nextDue },

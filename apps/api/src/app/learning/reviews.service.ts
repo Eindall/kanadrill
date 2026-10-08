@@ -21,6 +21,7 @@ import {
   type SessionConfig,
   type StrokeDto,
   type SubmitReviewRequest,
+  scoreDrawing,
 } from '@kanadrill/shared';
 import { DEFAULT_TIMEZONE } from '../config/env';
 import { User } from '../users/user.entity';
@@ -264,7 +265,17 @@ export class ReviewsService {
       throw new BadRequestException("Ce kanji n'est pas dans ton dictionnaire.");
     }
 
-    const meta = (item.metadata ?? {}) as { on?: string[]; kun?: string[] };
+    if (request.strokes !== undefined && request.mode !== 'drawing') {
+      throw new BadRequestException('Le dessin ne concerne que le tracé.');
+    }
+
+    const meta = (item.metadata ?? {}) as { on?: string[]; kun?: string[]; strokes?: StrokeDto[] };
+    // Classement « Tracé » : la précision est recalculée ici d'après le dessin (qu'on ne conserve pas), jamais crue sur parole.
+    let drawingPrecision: number | null = null;
+    if (request.strokes !== undefined) {
+      if (!meta.strokes?.length) throw new BadRequestException("Cet élément n'a pas de modèle de tracé.");
+      drawingPrecision = scoreDrawing(request.strokes, meta.strokes).score;
+    }
     const subject: AnswerableItem = {
       character: item.character,
       readings: item.readings,
@@ -294,6 +305,7 @@ export class ReviewsService {
         itemId: item.id,
         rating,
         durationMs: request.durationMs,
+        drawingPrecision,
         reviewedAt: now,
         // Snapshot de la carte avant la réponse.
         state: log.state,

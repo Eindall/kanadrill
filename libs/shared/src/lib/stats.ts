@@ -108,3 +108,32 @@ export interface LeaderboardDto {
 }
 
 export const LEADERBOARD_SIZE = 50;
+
+/** Les classements de la semaine (remis à zéro chaque lundi, dans `APP_TIMEZONE`). */
+export const WEEKLY_METRICS = ['answers', 'drawing'] as const;
+export type WeeklyMetric = (typeof WEEKLY_METRICS)[number];
+
+export interface WeeklyEntryDto {
+  /** Rang (1 = le plus de points) ; deux utilisateurs à égalité partagent leur rang. */
+  rank: number;
+  username: string;
+  avatarUrl: string | null;
+  /** `answers` : réponses de la semaine ; `drawing` : points de tracé (somme des précisions des tracés réussis). */
+  value: number;
+  /** `answers` : taux de réussite en % ; `drawing` : nombre de tracés faits (réussis ou non). */
+  detail: number;
+  isMe: boolean;
+}
+
+/** Classement de la semaine en cours : réponses données (toutes cartes) ou points de tracé. */
+export interface WeeklyLeaderboardDto {
+  metric: WeeklyMetric;
+  /** Lundi de la semaine, et lundi suivant (remise à zéro), `AAAA-MM-JJ`. */
+  weekStart: IsoDay;
+  nextWeekStart: IsoDay;
+  entries: WeeklyEntryDto[];
+  /** L'utilisateur lui-même, qu'il figure ou non dans la liste. */
+  me: { rank: number | null; value: number; detail: number; visible: boolean };
+  /** Nombre d'utilisateurs classés. */
+  total: number;
+}

@@ -1,11 +1,12 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { LeaderboardDto, StatsDto, StatsOverviewDto } from '@kanadrill/shared';
+import type { LeaderboardDto, StatsDto, StatsOverviewDto, WeeklyLeaderboardDto } from '@kanadrill/shared';
 import { CurrentUserId } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { User } from '../users/user.entity';
 import { LeaderboardService } from './leaderboard.service';
+import { WeeklyLeaderboardQueryDto } from './weekly-leaderboard-query.dto';
 import { StatsQueryDto } from './stats-query.dto';
 import { StatsService } from './stats.service';
 
@@ -36,5 +37,10 @@ export class StatsController {
   @Get('leaderboard')
   board(@CurrentUserId() userId: string): Promise<LeaderboardDto> {
     return this.leaderboard.leaderboard(userId);
+  }
+
+  @Get('leaderboard/weekly')
+  weekly(@CurrentUserId() userId: string, @Query() query: WeeklyLeaderboardQueryDto): Promise<WeeklyLeaderboardDto> {
+    return this.leaderboard.weekly(userId, query.metric);
   }
 }

@@ -1,18 +1,44 @@
-import { Component, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, computed, inject, input, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import type { LeaderboardDto, LeaderboardEntryDto } from '@kanadrill/shared';
 import { StatsService } from '../../core/stats.service';
 import { FlameIcon } from '../stats/flame-icon';
+import { WeeklyBoard } from './weekly-board';
+
+/** Les classements, dans l'ordre des onglets ; l'URL (`?tab=answers`) garde l'onglet. */
+const TABS = [
+  { id: 'streak', label: 'Séries' },
+  { id: 'answers', label: 'Réponses' },
+  { id: 'drawing', label: 'Tracé' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
 
 @Component({
   selector: 'app-leaderboard-page',
-  imports: [RouterLink, FlameIcon],
+  imports: [RouterLink, FlameIcon, WeeklyBoard],
   template: `
     <section class="flex flex-col gap-6">
-      <div class="flex flex-col gap-1">
-        <h1 class="text-2xl font-semibold tracking-tight">Classement</h1>
-        <p class="text-ink-soft">Les plus longues séries de jours d'apprentissage : un jour compte dès que tu réponds à une carte.</p>
+      <h1 class="text-2xl font-semibold tracking-tight">Classement</h1>
+
+      <div role="tablist" aria-label="Type de classement" class="grid grid-cols-3 gap-3">
+        @for (t of tabs; track t.id) {
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="t.id === tab()"
+            (click)="select(t.id)"
+            class="border px-4 py-3 font-medium"
+            [class]="t.id === tab() ? 'border-ink bg-ink text-on-ink' : 'border-line bg-paper hover:border-ink'"
+          >
+            {{ t.label }}
+          </button>
+        }
       </div>
+
+      @if (tab() !== 'streak') {
+        <app-weekly-board [metric]="tab() === 'answers' ? 'answers' : 'drawing'" />
+      } @else {
+      <p class="text-ink-soft">Les plus longues séries de jours d'apprentissage : un jour compte dès que tu réponds à une carte.</p>
 
       @if (error()) {
         <p role="alert" class="text-seal">Impossible de charger le classement pour l'instant.</p>
@@ -79,11 +105,18 @@ import { FlameIcon } from '../stats/flame-icon';
       } @else {
         <p role="status" class="text-ink-soft">Chargement…</p>
       }
+      }
     </section>
   `,
 })
 export class LeaderboardPage {
   private readonly api = inject(StatsService);
+  private readonly router = inject(Router);
+
+  protected readonly tabs = TABS;
+  /** Onglet demandé par l'URL (`?tab=…`) ; un nom inconnu retombe sur les séries. */
+  readonly tabParam = input<string | undefined>(undefined, { alias: 'tab' });
+  protected readonly tab = computed<TabId>(() => TABS.find((t) => t.id === this.tabParam())?.id ?? 'streak');
 
   protected readonly board = signal<LeaderboardDto | null>(null);
   protected readonly error = signal(false);
@@ -93,6 +126,10 @@ export class LeaderboardPage {
       (board) => this.board.set(board),
       () => this.error.set(true),
     );
+  }
+
+  protected select(id: TabId): void {
+    void this.router.navigate([], { queryParams: { tab: id === 'streak' ? null : id }, replaceUrl: true });
   }
 
   protected days(n: number): string {

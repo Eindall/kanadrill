@@ -10,6 +10,7 @@ import { Item } from './item.entity';
 @Entity('review_logs')
 @Index(['userId', 'reviewedAt'])
 @Check('"rating" BETWEEN 1 AND 4')
+@Check('CHK_review_logs_drawing_precision', '"drawing_precision" IS NULL OR "drawing_precision" BETWEEN 0 AND 100')
 export class ReviewLog {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -35,6 +36,10 @@ export class ReviewLog {
   /** Temps de réponse en millisecondes. */
   @Column({ name: 'duration_ms', type: 'integer' })
   durationMs!: number;
+
+  /** Au tracé : précision /100 annoncée par l'appareil (classement « Tracé »). `null` ailleurs. */
+  @Column({ name: 'drawing_precision', type: 'smallint', nullable: true })
+  drawingPrecision!: number | null;
 
   @Column({ name: 'reviewed_at', type: 'timestamptz', default: () => 'now()' })
   reviewedAt!: Date;
