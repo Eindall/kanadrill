@@ -21,6 +21,8 @@ import {
   type SessionConfig,
   type StrokeDto,
   type SubmitReviewRequest,
+  answerPoints,
+  drawingPoints,
   scoreDrawing,
 } from '@kanadrill/shared';
 import { DEFAULT_TIMEZONE } from '../config/env';
@@ -284,6 +286,19 @@ export class ReviewsService {
     };
     const correct = isAnswerCorrect(request.mode, request.answer, subject);
     const rating = gradeAnswer({ correct, mode: request.mode, durationMs: request.durationMs, answer: request.answer });
+    const timed = request.timed === true;
+    // Points du classement : 0 si faux ; au tracé, la précision recalculée (× bonus de rapidité en chronométré, 0 sans
+    // dessin) ; sinon 80 en chill, 120 → 60 selon le temps en chronométré.
+    let points = 0;
+    if (correct) {
+      if (request.mode === 'drawing') {
+        const strokeCount = meta.strokes?.length ?? 1;
+        const precision = drawingPrecision ?? 0;
+        points = Math.round(timed ? drawingPoints(precision, request.durationMs, strokeCount) : precision);
+      } else {
+        points = answerPoints(request.mode, request.durationMs, timed);
+      }
+    }
 
     const nextDue = await this.dataSource.transaction(async (manager) => {
       // Première réponse : la carte est créée avec les valeurs par défaut (= carte vierge).
@@ -306,6 +321,8 @@ export class ReviewsService {
         rating,
         durationMs: request.durationMs,
         drawingPrecision,
+        timed,
+        points,
         reviewedAt: now,
         // Snapshot de la carte avant la réponse.
         state: log.state,
@@ -322,7 +339,7 @@ export class ReviewsService {
       return card.due;
     });
 
-    return { correct, expected: expectedAnswer(request.mode, subject), rating, nextDue: nextDue.toISOString() };
+    return { correct, expected: expectedAnswer(request.mode, subject), rating, points, nextDue: nextDue.toISOString() };
   }
 
   /** Réponses données depuis minuit (dans `APP_TIMEZONE`), réussies ou non : ce que mesure l'objectif quotidien. */

@@ -13,13 +13,15 @@ import { isTouchDevice } from '../../core/device';
 import { ReviewService } from '../../core/review.service';
 import {
   adaptToDevice,
-  configToParams,
   familiesWithoutMode,
   loadSavedConfig,
+  loadSavedTimed,
   MODE_HINTS,
   MODE_LABELS,
   reconcileModes,
   saveConfig,
+  saveTimed,
+  sessionQueryParams,
   TYPE_LABELS,
   validateConfig,
 } from './session-config';
@@ -138,6 +140,26 @@ const OPTION =
         }
       </fieldset>
 
+      @if (valid()) {
+        <fieldset class="flex flex-col gap-3">
+          <legend class="mb-3 text-sm font-medium uppercase tracking-wide text-ink-soft">Rythme</legend>
+          <label [class]="option">
+            <input type="radio" name="pace" class="size-5 accent-ink" [checked]="!timed()" (change)="timed.set(false)" />
+            <span class="flex flex-col">
+              <span class="font-medium">Chill</span>
+              <span class="text-sm text-ink-soft">Pas de chrono : prends ton temps. 80 points par bonne réponse.</span>
+            </span>
+          </label>
+          <label [class]="option">
+            <input type="radio" name="pace" class="size-5 accent-ink" [checked]="timed()" (change)="timed.set(true)" />
+            <span class="flex flex-col">
+              <span class="font-medium">Chronométré</span>
+              <span class="text-sm text-ink-soft">Une barre de temps défile sur chaque carte : une bonne réponse rapporte de 120 points (immédiate) à 60 (temps écoulé). Au tracé, bonus de rapidité jusqu'à ×1,2.</span>
+            </span>
+          </label>
+        </fieldset>
+      }
+
       @if (missing().length > 0) {
         <p role="alert" class="text-sm text-seal">
           Choisis au moins un exercice pour {{ missing().includes('kana') ? 'les kana' : 'les kanji' }}@if (missing().length > 1) {
@@ -182,6 +204,7 @@ export class SetupPage {
   protected readonly count = signal<SessionSize>(this.saved.count);
   protected readonly selectedTypes = signal<ItemType[]>(this.saved.types);
   protected readonly selectedModes = signal<ReviewMode[]>(this.saved.modes);
+  protected readonly timed = signal(loadSavedTimed());
   protected readonly overview = signal<ReviewOverviewDto | null>(null);
 
   protected readonly showKana = computed(() => this.selectedTypes().some((type) => KANA_TYPES.includes(type)));
@@ -234,6 +257,7 @@ export class SetupPage {
     const config = validateConfig({ count: this.count(), types: this.selectedTypes(), modes: this.selectedModes() });
     if (!config || !this.canLaunch()) return;
     saveConfig(config);
-    void this.router.navigate(['/review'], { queryParams: configToParams(config) });
+    saveTimed(this.timed());
+    void this.router.navigate(['/review'], { queryParams: sessionQueryParams(config, this.timed()) });
   }
 }

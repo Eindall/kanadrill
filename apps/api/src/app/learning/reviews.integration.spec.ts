@@ -196,8 +196,31 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     expect(scores[0]).toBe(100);
     expect(scores[1]).toBeLessThan(60);
     expect(scores[2]).toBeNull();
+    // Le mode chronométré est enregistré (il donne droit au bonus de rapidité) ; par défaut, mode chill.
+    expect((await send(await itemId('ほ'), 'drawing', { strokes: copy(await strokesOf('ほ')), timed: true })).status).toBe(200);
+    const timedFlags = (await dataSource.query(`SELECT timed AS t FROM review_logs WHERE user_id = $1 ORDER BY reviewed_at`, [erin.id])).map((row: { t: boolean }) => row.t);
+    expect(timedFlags).toEqual([false, false, false, true]);
+    expect((await send(await itemId('ほ'), 'typing', { timed: true })).status).toBe(200); // le chrono concerne tous les exercices
+    expect((await send(await itemId('ほ'), 'drawing', { timed: 'oui' })).status).toBe(400);
     // Le client ne peut pas imposer la précision : le champ n'existe plus.
     expect((await send(await itemId('ほ'), 'drawing', { precision: 100 })).status).toBe(400);
+  });
+
+  it('donne des points : 80 en chill, 120 → 60 selon le temps en chronométré, 0 si faux', async () => {
+    const gina = await dataSource.getRepository(User).save({ username: 'gina', avatarUrl: null });
+    const cookieG = await loginAs(gina.id);
+    const answer = async (character: string, body: Record<string, unknown>) => {
+      const res = await call(cookieG, 'POST', '/reviews', { itemId: await itemId(character), mode: 'typing', ...body });
+      expect(res.status).toBe(200);
+      return ((await res.json()) as ReviewResultDto).points;
+    };
+    expect(await answer('ま', { answer: 'ma', durationMs: 1000 })).toBe(80); // chill : fixe, même très rapide
+    expect(await answer('み', { answer: 'mi', durationMs: 1000, timed: true })).toBe(113); // 120 - 60 × 1/8 = 112,5, arrondi
+    expect(await answer('む', { answer: 'mu', durationMs: 4000, timed: true })).toBe(90); // à mi-temps
+    expect(await answer('め', { answer: 'me', durationMs: 60_000, timed: true })).toBe(60); // temps écoulé : plancher
+    expect(await answer('も', { answer: 'faux', durationMs: 500, timed: true })).toBe(0); // faux : rien
+    const stored = (await dataSource.query(`SELECT points FROM review_logs WHERE user_id = $1 ORDER BY reviewed_at`, [gina.id])).map((row: { points: number }) => row.points);
+    expect(stored).toEqual([80, 113, 90, 60, 0]);
   });
 
   it('refuse un dessin mal formé, trop gros, ou envoyé hors tracé', async () => {

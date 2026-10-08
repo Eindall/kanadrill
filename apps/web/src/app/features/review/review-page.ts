@@ -1,5 +1,5 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { Component, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, effect, inject, signal, viewChild } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import {
@@ -9,7 +9,13 @@ import {
   expectedAnswer,
   isAnswerCorrect,
   isReverseMode,
+  ANSWER_POINTS,
+  ANSWER_TIME_LIMIT_MS,
+  answerPoints,
+  DRAWING_SPEED,
+  drawingPoints,
   scoreDrawing,
+  speedBonus,
   type DrawingScore,
   type ItemDto,
   type SessionConfig,
@@ -20,7 +26,7 @@ import { DrawingPad } from './drawing-pad';
 import { thinStrokes, type Point } from './drawing-path';
 import { StrokeOrder } from '../learn/stroke-order';
 import { advanceQueue, summarize, toQueue, type Attempt, type QueueEntry } from './review-queue';
-import { configFromParams, TYPE_LABELS } from './session-config';
+import { configFromParams, timedFromParams, TYPE_LABELS } from './session-config';
 
 /** `compare` : au tracé, le modèle est affiché et l'utilisateur s'auto-évalue. */
 type Phase = 'loading' | 'error' | 'question' | 'compare' | 'feedback' | 'done';
@@ -32,6 +38,8 @@ interface Feedback {
   /** Enregistrement de la réponse auprès du serveur en cours. */
   saving: boolean;
   saveError: boolean;
+  /** Points gagnés, une fois la réponse enregistrée (le serveur les compte). */
+  points: number | null;
 }
 
 @Component({
@@ -74,7 +82,11 @@ interface Feedback {
             </p>
           </div>
 
-          <dl class="grid grid-cols-3 gap-px border border-line bg-line text-center">
+          <dl class="grid grid-cols-2 gap-px border border-line bg-line text-center sm:grid-cols-4">
+            <div class="bg-paper p-4">
+              <dt class="text-sm text-ink-soft">Points</dt>
+              <dd class="text-3xl font-semibold">{{ s.points }}</dd>
+            </div>
             <div class="bg-paper p-4">
               <dt class="text-sm text-ink-soft">Cartes</dt>
               <dd class="text-3xl font-semibold">{{ s.cards }}</dd>
@@ -186,6 +198,25 @@ interface Feedback {
               }
             </div>
 
+            @if (timer(); as t) {
+              @if (phase() === 'question') {
+                <div class="flex flex-col gap-1">
+                  <p class="sr-only">{{ t.srText }}</p>
+                  <div class="relative h-3 w-full bg-line" aria-hidden="true">
+                    <div class="h-full" [class]="t.full ? 'bg-ok' : 'bg-ink-soft'" [style.width.%]="t.remaining * 100"></div>
+                    @if (t.halfMark) {
+                      <!-- Repère : à la moitié de la barre, le bonus commence à baisser. -->
+                      <span class="absolute inset-y-0 left-1/2 w-0.5 bg-paper"></span>
+                    }
+                  </div>
+                  <p class="flex justify-between text-sm tabular-nums text-ink-soft" aria-hidden="true">
+                    <span>Chrono</span>
+                    <span [class.font-semibold]="t.full" [class.text-ok]="t.full">{{ t.label }}</span>
+                  </p>
+                </div>
+              }
+            }
+
             @if (current.mode === 'choice' || current.mode === 'meaning' || isReverse(current.mode)) {
               <div
                 class="grid gap-3"
@@ -270,6 +301,9 @@ interface Feedback {
                   @for (message of describe(result); track message) {
                     <p class="text-sm text-ink-soft">{{ message }}</p>
                   }
+                  @if (timer(); as t) {
+                    <p class="text-sm text-ink-soft">{{ t.verdictText }}</p>
+                  }
                 </div>
               }
               @if (suggestion(); as proposed) {
@@ -304,6 +338,9 @@ interface Feedback {
                   <p class="text-lg font-semibold" [class.text-ok]="f.correct" [class.text-seal]="!f.correct">
                     @if (f.correct) {
                       <span aria-hidden="true">✓ </span>Bonne réponse
+                      @if (f.points; as points) {
+                        <span class="font-normal text-ink-soft">· +{{ points }} pts</span>
+                      }
                     } @else {
                       <span aria-hidden="true">✗ </span>Raté
                     }
@@ -395,6 +432,49 @@ export class ReviewPage {
   private readonly nextButton = viewChild<ElementRef<HTMLButtonElement>>('nextButton');
   private readonly answerInput = viewChild<ElementRef<HTMLInputElement>>('answerInput');
 
+  /** Session chronométrée : barre de temps sur chaque carte, points de 120 à 60 (réglé à l'écran de lancement, `?timed=1`). */
+  private readonly timed = timedFromParams(inject(ActivatedRoute).snapshot.queryParamMap);
+  /** « Maintenant » pour la barre de temps, rafraîchi pendant qu'on répond seulement. */
+  private readonly nowMs = signal(performance.now());
+  /**
+   * La barre de temps de la carte en mode chronométré.
+   * - Tracé : le temps de référence (2 s + 1,5 s par trait) s'écoule ; le bonus est maximal jusqu'à la moitié, puis
+   *   baisse jusqu'à ×1 au temps de référence. Elle s'arrête (et montre le bonus obtenu) quand le modèle est affiché.
+   * - Autres exercices : la barre se vide sur le temps limite de l'exercice, et les points passent de 120 à 60.
+   *   Elle disparaît à la réponse (les points gagnés s'affichent dans le retour).
+   */
+  protected readonly timer = computed(() => {
+    const card = this.card();
+    const phase = this.phase();
+    if (!this.timed || !card || (phase !== 'question' && phase !== 'compare')) return null;
+    if (card.mode === 'drawing') {
+      const strokes = card.strokes?.length ?? 1;
+      const reference = DRAWING_SPEED.baseMs + DRAWING_SPEED.perStrokeMs * strokes;
+      const elapsed = (phase === 'compare' ? this.revealedAt : this.nowMs()) - this.shownAt;
+      const bonus = speedBonus(elapsed, strokes);
+      const bonusText = `×${bonus.toFixed(2).replace('.', ',')}`;
+      const precision = this.score()?.score ?? 0;
+      return {
+        remaining: Math.min(1, Math.max(0, 1 - elapsed / reference)),
+        full: elapsed <= reference / 2,
+        halfMark: true,
+        label: `Bonus ${bonusText}`,
+        srText: `Mode chronométré : bonus de rapidité jusqu'à ×${DRAWING_SPEED.maxBonus.toFixed(1).replace('.', ',')} si tu traces en moins de ${Math.round(reference / 2000)} secondes.`,
+        verdictText: `Bonus de rapidité : ${bonusText}${precision > 0 ? ` → ${Math.round(drawingPoints(precision, elapsed, strokes))} points` : ''}.`,
+      };
+    }
+    const limit = ANSWER_TIME_LIMIT_MS[card.mode];
+    const elapsed = this.nowMs() - this.shownAt;
+    return {
+      remaining: Math.min(1, Math.max(0, 1 - elapsed / limit)),
+      full: elapsed < limit / 4,
+      halfMark: false,
+      label: `${answerPoints(card.mode, elapsed, true)} pts`,
+      srText: `Mode chronométré : cette bonne réponse rapporte de ${ANSWER_POINTS.max} points, tout de suite, à ${ANSWER_POINTS.min} points au bout de ${Math.round(limit / 1000)} secondes.`,
+      verdictText: '',
+    };
+  });
+
   private shownAt = 0;
   /** Au tracé : instant où le modèle est affiché (la durée de la réponse s'arrête là, pas à l'auto-évaluation). */
   private revealedAt = 0;
@@ -404,6 +484,12 @@ export class ReviewPage {
     // Le focus suit le flux : sur « Suivant » après une réponse (Entrée enchaîne), sur le champ pour la saisie.
     effect(() => this.nextButton()?.nativeElement.focus());
     effect(() => this.answerInput()?.nativeElement.focus());
+    if (this.timed) {
+      const tick = setInterval(() => {
+        if (this.phase() === 'question') this.nowMs.set(performance.now());
+      }, 50);
+      inject(DestroyRef).onDestroy(() => clearInterval(tick));
+    }
     if (this.config) {
       void this.start();
     } else {
@@ -520,18 +606,19 @@ export class ReviewPage {
       answer: text,
       saving: true,
       saveError: false,
+      points: null,
     });
     this.phase.set('feedback');
 
     this.pendingSave = async () => {
       this.feedback.update((f) => f && { ...f, saving: true, saveError: false });
       try {
-        const result = await this.reviews.submit({ itemId: card.item.id, mode: card.mode, answer: text, durationMs, ...(strokes ? { strokes } : {}) });
+        const result = await this.reviews.submit({ itemId: card.item.id, mode: card.mode, answer: text, durationMs, ...(strokes ? { strokes } : {}), ...(this.timed ? { timed: true } : {}) });
         this.attempts.update((list) => [
           ...list,
-          { key: entry.key, card, correct: result.correct, expected: result.expected, durationMs, nextDue: result.nextDue },
+          { key: entry.key, card, correct: result.correct, expected: result.expected, durationMs, points: result.points, nextDue: result.nextDue },
         ]);
-        this.feedback.update((f) => f && { ...f, correct: result.correct, expected: result.expected, saving: false });
+        this.feedback.update((f) => f && { ...f, correct: result.correct, expected: result.expected, saving: false, points: result.points });
         this.pendingSave = null;
         // Au tracé, l'auto-évaluation suffit : pas d'écran de résultat, on enchaîne.
         if (card.mode === 'drawing') this.next();

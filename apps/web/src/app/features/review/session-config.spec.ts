@@ -1,4 +1,4 @@
-import { adaptToDevice, availableModes, configFromParams, configToParams, DEFAULT_CONFIG, familiesWithoutMode, loadSavedConfig, reconcileModes, saveConfig, validateConfig } from './session-config';
+import { adaptToDevice, availableModes, configFromParams, configToParams, DEFAULT_CONFIG, familiesWithoutMode, loadSavedConfig, loadSavedTimed, reconcileModes, saveConfig, saveTimed, sessionQueryParams, timedFromParams, validateConfig } from './session-config';
 
 const params = (query: string) => new URLSearchParams(query);
 
@@ -119,5 +119,38 @@ describe('familiesWithoutMode', () => {
     expect(familiesWithoutMode(['kanji'], ['choice'])).toEqual(['kanji']);
     expect(familiesWithoutMode(['hiragana', 'kanji'], ['reverse'])).toEqual(['kanji']);
     expect(familiesWithoutMode(['hiragana', 'kanji'], ['reverse', 'kanjiReverse'])).toEqual([]);
+  });
+});
+
+describe('rythme de la session (chill ou chronométré)', () => {
+  const config = { count: 15 as const, types: ['hiragana' as const], modes: ['choice' as const, 'drawing' as const] };
+
+  it('lit `timed=1` dans l\'URL, tout le reste vaut chill', () => {
+    expect(timedFromParams(params('timed=1'))).toBe(true);
+    for (const query of ['', 'timed=0', 'timed=true', 'timed=']) expect([query, timedFromParams(params(query))]).toEqual([query, false]);
+  });
+
+  it('ajoute `timed=1` aux paramètres seulement si chronométré, quels que soient les exercices', () => {
+    expect(sessionQueryParams(config, true)['timed']).toBe('1');
+    expect(sessionQueryParams(config, false)).toEqual(configToParams(config));
+    expect(sessionQueryParams({ ...config, modes: ['choice'] }, true)['timed']).toBe('1');
+  });
+
+  it('ne change pas ce que l\'API reçoit : le réglage de session ne porte jamais `timed`', () => {
+    expect(Object.keys(configToParams(config))).toEqual(['count', 'types', 'modes']);
+  });
+
+  it('mémorise le choix par appareil (chill par défaut) et survit à un stockage indisponible', () => {
+    localStorage.clear();
+    expect(loadSavedTimed()).toBe(false);
+    saveTimed(true);
+    expect(loadSavedTimed()).toBe(true);
+    saveTimed(false);
+    expect(loadSavedTimed()).toBe(false);
+    const broken = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('bloqué');
+    });
+    expect(loadSavedTimed()).toBe(false);
+    broken.mockRestore();
   });
 });

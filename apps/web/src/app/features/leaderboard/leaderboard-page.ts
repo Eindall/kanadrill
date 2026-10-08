@@ -1,6 +1,6 @@
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import type { LeaderboardDto, LeaderboardEntryDto } from '@kanadrill/shared';
+import type { LeaderboardDto, LeaderboardEntryDto, WeeklyMetric } from '@kanadrill/shared';
 import { StatsService } from '../../core/stats.service';
 import { FlameIcon } from '../stats/flame-icon';
 import { WeeklyBoard } from './weekly-board';
@@ -8,6 +8,7 @@ import { WeeklyBoard } from './weekly-board';
 /** Les classements, dans l'ordre des onglets ; l'URL (`?tab=answers`) garde l'onglet. */
 const TABS = [
   { id: 'streak', label: 'Séries' },
+  { id: 'points', label: 'Points' },
   { id: 'answers', label: 'Réponses' },
   { id: 'drawing', label: 'Tracé' },
 ] as const;
@@ -20,7 +21,7 @@ type TabId = (typeof TABS)[number]['id'];
     <section class="flex flex-col gap-6">
       <h1 class="text-2xl font-semibold tracking-tight">Classement</h1>
 
-      <div role="tablist" aria-label="Type de classement" class="grid grid-cols-3 gap-3">
+      <div role="tablist" aria-label="Type de classement" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         @for (t of tabs; track t.id) {
           <button
             type="button"
@@ -36,7 +37,7 @@ type TabId = (typeof TABS)[number]['id'];
       </div>
 
       @if (tab() !== 'streak') {
-        <app-weekly-board [metric]="tab() === 'answers' ? 'answers' : 'drawing'" />
+        <app-weekly-board [metric]="metric()" />
       } @else {
       <p class="text-ink-soft">Les plus longues séries de jours d'apprentissage : un jour compte dès que tu réponds à une carte.</p>
 
@@ -117,6 +118,10 @@ export class LeaderboardPage {
   /** Onglet demandé par l'URL (`?tab=…`) ; un nom inconnu retombe sur les séries. */
   readonly tabParam = input<string | undefined>(undefined, { alias: 'tab' });
   protected readonly tab = computed<TabId>(() => TABS.find((t) => t.id === this.tabParam())?.id ?? 'streak');
+  protected readonly metric = computed<WeeklyMetric>(() => {
+    const tab = this.tab();
+    return tab === 'streak' ? 'points' : tab;
+  });
 
   protected readonly board = signal<LeaderboardDto | null>(null);
   protected readonly error = signal(false);

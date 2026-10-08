@@ -31,6 +31,35 @@ export const DRAWING_SCORE = {
   minSizeRatio: 0.25,
 } as const;
 
+/**
+ * Bonus de rapidité du classement « Tracé » (jamais une pénalité : un tracé lent vaut sa précision pleine).
+ * Temps de référence = `baseMs` + `perStrokeMs` par trait du modèle ; en dessous de la moitié, le bonus est maximal,
+ * au-dessus du temps de référence il n'y en a plus, et il décroît linéairement entre les deux.
+ */
+export const DRAWING_SPEED = {
+  baseMs: 2000,
+  perStrokeMs: 1500,
+  /** Bonus maximal (×1,2) atteint à la moitié du temps de référence ou moins. */
+  maxBonus: 1.2,
+  /** Durée minimale prise en compte par trait : en deçà, personne ne dessine (durée annoncée par l'appareil). */
+  minPerStrokeMs: 300,
+} as const;
+
+/** Multiplicateur de rapidité (1 à `maxBonus`) d'un tracé fait en `durationMs` pour un modèle de `strokeCount` traits. */
+export function speedBonus(durationMs: number, strokeCount: number): number {
+  const strokes = Math.max(1, strokeCount);
+  const reference = DRAWING_SPEED.baseMs + DRAWING_SPEED.perStrokeMs * strokes;
+  const time = Math.max(durationMs, DRAWING_SPEED.minPerStrokeMs * strokes);
+  const ratio = time / reference;
+  if (ratio >= 1) return 1;
+  if (ratio <= 0.5) return DRAWING_SPEED.maxBonus;
+  return 1 + (DRAWING_SPEED.maxBonus - 1) * ((1 - ratio) / 0.5);
+}
+
+/** Points d'un tracé réussi au classement : précision (0-100) × bonus de rapidité (jusqu'à 120). */
+export const drawingPoints = (precision: number, durationMs: number, strokeCount: number): number =>
+  precision * speedBonus(durationMs, strokeCount);
+
 export type DrawingVerdict = 'good' | 'fair' | 'wrong';
 
 /** Ce qui ne va pas ; `stroke` est l'indice (à partir de 0) du trait de l'utilisateur concerné. */

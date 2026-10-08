@@ -1,4 +1,4 @@
-import { DRAWING_SCORE, flattenPath, polylineLength, resample, scoreDrawing, type Point2D, type StrokeDto } from '@kanadrill/shared';
+import { DRAWING_SCORE, drawingPoints, speedBonus, flattenPath, polylineLength, resample, scoreDrawing, type Point2D, type StrokeDto } from '@kanadrill/shared';
 import { buildKanaSeeds } from './seed/seed-items';
 import { loadKanjiRecords } from './seed/kanji-seed';
 
@@ -265,6 +265,44 @@ describe('note /100', () => {
     // Les « faux » restants : le trait décalé tombe sur un autre trait du modèle, donc se lit comme hors d'ordre.
     expect(tally.wrong / total).toBeLessThan(0.3);
     expect(tally.good / total).toBeLessThan(0.1);
+  });
+});
+
+describe('bonus de rapidité', () => {
+  // Un modèle à 3 traits : temps de référence = 2 s + 3 × 1,5 s = 6,5 s.
+  it('vaut ×1,2 à la moitié du temps de référence ou moins, ×1 au temps de référence ou plus, linéaire entre les deux', () => {
+    expect(speedBonus(3250, 3)).toBeCloseTo(1.2);
+    expect(speedBonus(1500, 3)).toBeCloseTo(1.2);
+    expect(speedBonus(4875, 3)).toBeCloseTo(1.1);
+    expect(speedBonus(6500, 3)).toBe(1);
+    expect(speedBonus(120_000, 3)).toBe(1); // jamais une pénalité
+  });
+
+  it('ne récompense pas une durée impossible : plancher de 0,3 s par trait', () => {
+    expect(speedBonus(0, 3)).toBeCloseTo(1.2); // déjà au maximum
+    // 15 traits : référence 24,5 s, plancher 4,5 s ; un temps sous le plancher vaut le plancher.
+    expect(speedBonus(100, 15)).toBe(speedBonus(4500, 15));
+  });
+
+  it('le temps de référence grandit avec le nombre de traits', () => {
+    expect(speedBonus(8000, 1)).toBe(1);
+    expect(speedBonus(8000, 8)).toBeGreaterThan(1);
+  });
+
+  it('ne décroît jamais quand on va plus vite, et reste entre 1 et 1,2', () => {
+    let previous = 0;
+    for (let ms = 120_000; ms >= 0; ms -= 250) {
+      const bonus = speedBonus(ms, 5);
+      expect(bonus).toBeGreaterThanOrEqual(previous);
+      expect(bonus).toBeGreaterThanOrEqual(1);
+      expect(bonus).toBeLessThanOrEqual(1.2);
+      previous = bonus;
+    }
+  });
+
+  it('multiplie la précision : 100 points × 1,2 = 120 au mieux', () => {
+    expect(drawingPoints(100, 1000, 3)).toBeCloseTo(120);
+    expect(drawingPoints(80, 60_000, 3)).toBe(80);
   });
 });
 

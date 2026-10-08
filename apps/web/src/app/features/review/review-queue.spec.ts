@@ -21,6 +21,7 @@ const attempt = (
   correct,
   expected: c.item.readings[0],
   durationMs,
+  points: correct ? 80 : 0,
   nextDue,
 });
 
@@ -69,12 +70,16 @@ describe('summarize', () => {
     expect(summary.firstTryCorrect).toBe(1);
     expect(summary.missed).toHaveLength(1);
   });
+  it('additionne les points de toutes les réponses, cartes reposées comprises', () => {
+    expect(summarize([attempt(a, false), attempt(b, true), attempt(a, true)]).points).toBe(160);
+  });
   it('gère une session vide', () => {
     expect(summarize([])).toEqual({
       cards: 0,
       firstTryCorrect: 0,
       successRate: 0,
       averageDurationMs: 0,
+      points: 0,
       missed: [],
       nextDue: null,
     });

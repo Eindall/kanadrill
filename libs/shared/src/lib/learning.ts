@@ -252,6 +252,12 @@ export interface SubmitReviewRequest {
    * « Tracé » ; le dessin n'est **pas conservé**. Optionnel : sans lui, la réponse compte mais ne rapporte pas de points.
    */
   strokes?: Point2D[][];
+  /**
+   * La session est en mode chronométré (barre de temps) : les points du classement dépendent alors du temps pris
+   * (`answerPoints`, bonus de rapidité au tracé) ; en chill, un montant fixe. Annoncé par l'appareil comme la
+   * durée : pas vérifiable côté serveur.
+   */
+  timed?: boolean;
 }
 
 export interface ReviewResultDto {
@@ -259,6 +265,8 @@ export interface ReviewResultDto {
   /** Lecture de référence, à afficher en cas d'erreur. */
   expected: string;
   rating: ReviewRating;
+  /** Points gagnés au classement (0 si la réponse est fausse), calculés par le serveur. */
+  points: number;
   /** Prochaine échéance de la carte (ISO 8601) : une échéance proche = à reposer dans la session. */
   nextDue: string;
 }

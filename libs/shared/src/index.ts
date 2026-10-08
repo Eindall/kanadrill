@@ -7,3 +7,4 @@ export * from './lib/svg-path';
 export * from './lib/drawing-score';
 export * from './lib/kana';
 export * from './lib/stats';
+export * from './lib/answer-points';

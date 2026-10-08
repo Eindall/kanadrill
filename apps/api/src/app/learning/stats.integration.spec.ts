@@ -54,12 +54,12 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
     for (const offset of offsets) await answer(userId, character, day(offset));
   };
 
-  /** Un tracé fait le jour `date` à `time` : précision annoncée et note (1 = raté, 2+ = compté). */
-  const drawn = (userId: string, date: IsoDay, time: string, precision: number | null, rating = 3) =>
+  /** Un tracé fait le jour `date` à `time` : précision, note (1 = raté, 2+ = compté) durée (lente par défaut) et mode chronométré (le bonus de rapidité n'existe qu'en chronométré). */
+  const drawn = (userId: string, date: IsoDay, time: string, precision: number | null, rating = 3, durationMs = 60_000, timed = false) =>
     dataSource.query(
-      `INSERT INTO review_logs (user_id, item_id, rating, duration_ms, reviewed_at, drawing_precision, state, due, stability, difficulty, elapsed_days, last_elapsed_days, scheduled_days, learning_steps)
-       VALUES ($1, $2, $3, 2000, ($4::date + $5::time) AT TIME ZONE 'Europe/Paris', $6, 0, now(), 0, 0, 0, 0, 0, 0)`,
-      [userId, itemIds['あ'], rating, date, time, precision],
+      `INSERT INTO review_logs (user_id, item_id, rating, duration_ms, reviewed_at, drawing_precision, timed, state, due, stability, difficulty, elapsed_days, last_elapsed_days, scheduled_days, learning_steps)
+       VALUES ($1, $2, $3, $7, ($4::date + $5::time) AT TIME ZONE 'Europe/Paris', $6, $8, 0, now(), 0, 0, 0, 0, 0, 0)`,
+      [userId, itemIds['あ'], rating, date, time, precision, durationMs, timed],
     );
 
   beforeAll(async () => {
@@ -336,6 +336,30 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       expect((await weekly(eve.cookie, 'answers')).me).toEqual({ rank: null, value: 9, detail: 100, visible: false });
     });
 
+    it('classe les points : somme des points enregistrés de la semaine, tous exercices, les ratées valent 0', async () => {
+      await dataSource.query('TRUNCATE users CASCADE');
+      const monday = mondayOf(today);
+      const alice = await makeUser('alice');
+      const bob = await makeUser('bob');
+      const scored = (userId: string, date: IsoDay, points: number, rating = 3) =>
+        dataSource.query(
+          `INSERT INTO review_logs (user_id, item_id, rating, duration_ms, reviewed_at, points, state, due, stability, difficulty, elapsed_days, last_elapsed_days, scheduled_days, learning_steps)
+           VALUES ($1, $2, $3, 2000, ($4::date + '12:00'::time) AT TIME ZONE 'Europe/Paris', $5, 0, now(), 0, 0, 0, 0, 0, 0)`,
+          [userId, itemIds['あ'], rating, date, points],
+        );
+      await scored(alice.user.id, monday, 80);
+      await scored(alice.user.id, monday, 112);
+      await scored(alice.user.id, monday, 0, 1); // ratée
+      await scored(alice.user.id, shiftDay(monday, -1), 120); // semaine passée : ignorée
+      await scored(bob.user.id, monday, 100);
+
+      const board = await weekly(alice.cookie, 'points');
+      expect(board.entries.map((e) => [e.rank, e.username, e.value, e.detail])).toEqual([
+        [1, 'alice', 192, 2],
+        [2, 'bob', 100, 1],
+      ]);
+    });
+
     it('classe les points de tracé : somme des précisions des tracés réussis, les ratés valent 0, les tracés sans précision ne comptent pas', async () => {
       await dataSource.query('TRUNCATE users CASCADE');
       const monday = mondayOf(today);
@@ -361,6 +385,32 @@ const TEST_DATABASE_URL = process.env['TEST_DATABASE_URL'];
       ]);
       expect(board.me).toEqual({ rank: 1, value: 160, detail: 3, visible: true });
       expect((await weekly(carol.cookie, 'drawing')).me).toEqual({ rank: null, value: 0, detail: 1, visible: true });
+    });
+
+    it('ajoute un bonus de rapidité aux tracés chronométrés (jusqu\'à ×1,2 à la moitié du temps de référence, sans pénalité), pas en mode chill', async () => {
+      await dataSource.query('TRUNCATE users CASCADE');
+      const monday = mondayOf(today);
+      // あ a 3 traits : temps de référence = 2 s + 3 × 1,5 s = 6,5 s.
+      const fast = await makeUser('rapide');
+      const middle = await makeUser('moyen');
+      const slow = await makeUser('lent');
+      const chill = await makeUser('chill');
+      const ratee = await makeUser('ratee');
+      await drawn(fast.user.id, monday, '10:00', 100, 3, 3250, true); // moitié du temps de référence : ×1,2 → 120
+      await drawn(fast.user.id, monday, '11:00', 100, 3, 500, true); // plus vite que possible : plafonné, ×1,2 → 120
+      await drawn(middle.user.id, monday, '10:00', 100, 3, 4875, true); // trois quarts : ×1,1 → 110
+      await drawn(slow.user.id, monday, '10:00', 100, 3, 6500, true); // temps de référence : ×1,0 → 100
+      await drawn(slow.user.id, monday, '11:00', 100, 3, 120_000, true); // très lent : aucune pénalité → 100
+      await drawn(chill.user.id, monday, '10:00', 100, 3, 1000, false); // très vite mais sans chrono : pas de bonus → 100
+      await drawn(ratee.user.id, monday, '10:00', 90, 1, 1000, true); // raté (même très vite) : 0
+      const board = await weekly(fast.cookie, 'drawing');
+      expect(board.entries.map((e) => [e.rank, e.username, e.value, e.detail])).toEqual([
+        [1, 'rapide', 240, 2],
+        [2, 'lent', 200, 2],
+        [3, 'moyen', 110, 1],
+        [4, 'chill', 100, 1],
+      ]);
+      expect((await weekly(ratee.cookie, 'drawing')).me).toEqual({ rank: null, value: 0, detail: 1, visible: true });
     });
 
     it('applique l\'option de masquage du classement des séries aux classements de la semaine', async () => {

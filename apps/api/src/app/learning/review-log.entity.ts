@@ -10,6 +10,7 @@ import { Item } from './item.entity';
 @Entity('review_logs')
 @Index(['userId', 'reviewedAt'])
 @Check('"rating" BETWEEN 1 AND 4')
+@Check('CHK_review_logs_points', '"points" BETWEEN 0 AND 120')
 @Check('CHK_review_logs_drawing_precision', '"drawing_precision" IS NULL OR "drawing_precision" BETWEEN 0 AND 100')
 export class ReviewLog {
   @PrimaryGeneratedColumn('uuid')
@@ -40,6 +41,14 @@ export class ReviewLog {
   /** Au tracé : précision /100 annoncée par l'appareil (classement « Tracé »). `null` ailleurs. */
   @Column({ name: 'drawing_precision', type: 'smallint', nullable: true })
   drawingPrecision!: number | null;
+
+  /** Session chronométrée (annoncé par l'appareil) : les points dépendent alors du temps pris. */
+  @Column({ type: 'boolean', default: false })
+  timed!: boolean;
+
+  /** Points de la réponse au classement « Points » (0 si ratée) : 80 en chill, 120 → 60 en chronométré ; au tracé, précision × bonus. */
+  @Column({ type: 'smallint', default: 0 })
+  points!: number;
 
   @Column({ name: 'reviewed_at', type: 'timestamptz', default: () => 'now()' })
   reviewedAt!: Date;

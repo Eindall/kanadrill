@@ -15,6 +15,14 @@ interface MetricText {
 const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
 
 export const WEEKLY_TEXTS: Record<WeeklyMetric, MetricText> = {
+  points: {
+    intro:
+      "Chaque bonne réponse rapporte des points, tous exercices confondus : 80 en session « chill », de 120 (réponse immédiate) à 60 (chrono écoulé) en session chronométrée. Au tracé : la précision, avec un bonus de rapidité jusqu'à ×1,2 en chronométré. Une mauvaise réponse ne rapporte rien.",
+    list: 'Classement des points de la semaine',
+    unit: (n) => `${n} pt${n > 1 ? 's' : ''}`,
+    detail: (n) => plural(n, 'bonne réponse', 'bonnes réponses'),
+    empty: "Personne n'a encore de points cette semaine : lance une session pour ouvrir le bal.",
+  },
   answers: {
     intro: 'Le plus de cartes tentées depuis lundi, réussies ou non, tous exercices confondus.',
     list: 'Classement des réponses de la semaine',
@@ -24,7 +32,7 @@ export const WEEKLY_TEXTS: Record<WeeklyMetric, MetricText> = {
   },
   drawing: {
     intro:
-      'Chaque tracé réussi rapporte sa précision (jusqu\'à 100 points), un tracé raté rien. Les tracés se font sur téléphone, dans une session avec l\'exercice « Écriture ».',
+      'Chaque tracé réussi rapporte sa précision (jusqu\'à 100 points). En session chronométrée, un bonus de rapidité va jusqu\'à ×1,2 (maximal en moitié moins de temps que la référence, soit 2 s + 1,5 s par trait ; jamais de pénalité). Un tracé raté ne rapporte rien. Les tracés se font sur téléphone, dans une session avec l\'exercice « Écriture ».',
     list: 'Classement des points de tracé de la semaine',
     unit: (n) => `${n} pt${n > 1 ? 's' : ''}`,
     detail: (n) => plural(n, 'tracé', 'tracés'),

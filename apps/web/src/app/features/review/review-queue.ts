@@ -16,6 +16,8 @@ export interface Attempt {
   correct: boolean;
   expected: string;
   durationMs: number;
+  /** Points gagnés (0 si ratée), tels que le serveur les a comptés. */
+  points: number;
   /** Prochaine échéance renvoyée par le serveur (ISO 8601). */
   nextDue: string;
 }
@@ -28,6 +30,8 @@ export interface SessionSummary {
   /** 0–100, calculé sur la première réponse de chaque carte. */
   successRate: number;
   averageDurationMs: number;
+  /** Total des points gagnés pendant la session (toutes les réponses, y compris les cartes reposées). */
+  points: number;
   /** Items ratés à la première réponse, avec leur lecture (sans doublon). */
   missed: Array<{ item: ItemDto; expected: string }>;
   /** Échéance la plus proche parmi les cartes revues (après leur dernière réponse), ou null. */
@@ -70,6 +74,7 @@ export function summarize(attempts: readonly Attempt[]): SessionSummary {
     successRate: firsts.length === 0 ? 0 : Math.round((correct / firsts.length) * 100),
     averageDurationMs:
       attempts.length === 0 ? 0 : Math.round(attempts.reduce((sum, a) => sum + a.durationMs, 0) / attempts.length),
+    points: attempts.reduce((sum, a) => sum + a.points, 0),
     missed: [...missed.values()],
     nextDue,
   };

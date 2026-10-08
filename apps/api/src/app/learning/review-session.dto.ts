@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateBy } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateBy } from 'class-validator';
 import {
   MAX_DRAWING_POINTS,
   MAX_DRAWING_STROKE_POINTS,
@@ -49,4 +49,8 @@ export class SubmitReviewDto implements SubmitReviewRequest {
   @IsOptional()
   @ValidateBy({ name: 'isDrawing', validator: { validate: isDrawing, defaultMessage: () => 'strokes doit être un dessin valide (traits de points [x, y])' } })
   strokes?: Point2D[][];
+
+  @IsOptional()
+  @IsBoolean()
+  timed?: boolean;
 }

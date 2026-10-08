@@ -8,7 +8,6 @@ import { LearnPage } from './features/learn/learn-page';
 import { ReviewPage } from './features/review/review-page';
 import { SetupPage } from './features/review/setup-page';
 import { ProfilePage } from './features/profile/profile-page';
-import { StatsPage } from './features/stats/stats-page';
 import { Shell } from './layout/shell';
 
 export const appRoutes: Route[] = [
@@ -23,7 +22,7 @@ export const appRoutes: Route[] = [
       { path: 'review', component: ReviewPage, title: 'Révision · KanaDrill' },
       { path: 'learn', component: LearnPage, title: 'Apprendre · KanaDrill' },
       { path: 'learn/:id', component: ItemPage, title: 'Fiche · KanaDrill' },
-      { path: 'stats', component: StatsPage, title: 'Statistiques · KanaDrill' },
+      { path: 'stats', loadComponent: () => import('./features/stats/stats-page').then((m) => m.StatsPage), title: 'Statistiques · KanaDrill' },
       { path: 'leaderboard', loadComponent: () => import('./features/leaderboard/leaderboard-page').then((m) => m.LeaderboardPage), title: 'Classement · KanaDrill' },
       { path: 'about', component: AboutPage, title: 'À propos · KanaDrill' },
       { path: 'profile', component: ProfilePage, title: 'Mon profil · KanaDrill' },

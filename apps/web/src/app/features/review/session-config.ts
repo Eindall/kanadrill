@@ -31,6 +31,7 @@ export const MODE_HINTS: Partial<Record<ReviewMode, string>> = {
 export const TYPE_LABELS: Record<ItemType, string> = { hiragana: 'Hiragana', katakana: 'Katakana', kanji: 'Kanji' };
 
 const STORAGE_KEY = 'kanadrill.sessionConfig';
+const TIMED_KEY = 'kanadrill.timed';
 
 export const DEFAULT_CONFIG: SessionConfig = {
   count: DEFAULT_SESSION_SIZE,
@@ -119,4 +120,33 @@ export function saveConfig(config: SessionConfig): void {
   } catch {
     // stockage indisponible : on ne mémorise simplement pas
   }
+}
+
+/**
+ * Rythme de la session : `true` = chronométré (barre de temps sur chaque carte, points de 120 à 60 selon le temps, bonus
+ * de rapidité au tracé), `false` = chill (pas de chrono, 80 points par bonne réponse).
+ * Réglage à part du `SessionConfig` (que l'API valide strictement) : il reste côté appareil et dans l'URL de la
+ * session (`?timed=1`), jamais envoyé à `GET /reviews/session`.
+ */
+export const timedFromParams = (params: { get(name: string): string | null }): boolean => params.get('timed') === '1';
+
+export function loadSavedTimed(): boolean {
+  try {
+    return localStorage.getItem(TIMED_KEY) === '1';
+  } catch {
+    return false; // stockage indisponible : chill
+  }
+}
+
+export function saveTimed(timed: boolean): void {
+  try {
+    localStorage.setItem(TIMED_KEY, timed ? '1' : '0');
+  } catch {
+    // stockage indisponible : on ne mémorise simplement pas
+  }
+}
+
+/** Les paramètres d'URL de la session : le réglage, plus `timed=1` si la session est chronométrée. */
+export function sessionQueryParams(config: SessionConfig, timed: boolean): Record<string, string> {
+  return { ...configToParams(config), ...(timed ? { timed: '1' } : {}) };
 }

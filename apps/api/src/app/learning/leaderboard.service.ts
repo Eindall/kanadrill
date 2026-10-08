@@ -4,6 +4,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import {
   LEADERBOARD_SIZE,
+  drawingPoints,
   type LeaderboardDto,
   type LeaderboardEntryDto,
   type WeeklyEntryDto,
@@ -105,36 +106,23 @@ export class LeaderboardService {
   /**
    * Classement de la semaine en cours (du lundi au lundi, dans `APP_TIMEZONE`) :
    * - `answers` : réponses données, réussies ou non ; `detail` = taux de réussite (note ≥ Hard) en %.
-   * - `drawing` : **points de tracé** = somme des précisions des tracés comptés réussis (note ≥ Hard : un tracé
-   *   compté « raté » vaut 0) ; `detail` = nombre de tracés faits. Les tracés sans précision (anciens ou envoyés
-   *   sans) ne comptent pas. La précision est annoncée par l'appareil : classement « sur l'honneur ».
+   * - `points` : **points** de toutes les bonnes réponses (`review_logs.points`, calculés à l'enregistrement : 80 en chill,
+   *   120 → 60 selon le temps en chronométré, précision × bonus au tracé) ; `detail` = nombre de bonnes réponses.
+   * - `drawing` : **points de tracé** = somme, sur les tracés comptés réussis (note ≥ Hard : un tracé « raté » vaut 0),
+   *   de la précision recalculée par le serveur, × un bonus de rapidité (jusqu'à ×1,2, voir `speedBonus`) en mode
+   *   chronométré seulement ;
+   *   `detail` = nombre de tracés faits. Les tracés sans précision (anciens ou envoyés sans dessin) ne comptent pas.
    * Même règle de visibilité que les séries : seuls les utilisateurs visibles et à plus de 0 point sont classés.
    */
   async weekly(userId: string, metric: WeeklyMetric, now = new Date()): Promise<WeeklyLeaderboardDto> {
     const weekStart = mondayOf(await this.stats.today(now));
     const nextWeekStart = shiftDay(weekStart, 7);
-    const [valueSql, detailSql, where] =
+    const rows =
       metric === 'answers'
-        ? [
-            'count(r.id)::int',
-            'coalesce(round(100.0 * count(r.id) FILTER (WHERE r.rating >= 2) / nullif(count(r.id), 0)), 0)::int',
-            'TRUE',
-          ]
-        : [
-            'coalesce(sum(CASE WHEN r.rating >= 2 THEN r.drawing_precision ELSE 0 END), 0)::int',
-            'count(r.id)::int',
-            'r.drawing_precision IS NOT NULL',
-          ];
-    const rows: WeeklyRow[] = await this.dataSource.query(
-      `SELECT u.id, u.username, u.avatar_url, u.leaderboard_visible AS visible, ${valueSql} AS value, ${detailSql} AS detail
-       FROM users u
-       LEFT JOIN review_logs r ON r.user_id = u.id
-         AND r.reviewed_at >= ($1::date::timestamp AT TIME ZONE $3)
-         AND r.reviewed_at < ($2::date::timestamp AT TIME ZONE $3)
-         AND ${where}
-       GROUP BY u.id`,
-      [weekStart, nextWeekStart, this.timezone],
-    );
+        ? await this.answerRows(weekStart, nextWeekStart)
+        : metric === 'points'
+          ? await this.pointRows(weekStart, nextWeekStart)
+          : await this.drawingRows(weekStart, nextWeekStart);
 
     const ranked = rows
       .filter((row) => row.visible && row.value > 0)
@@ -165,5 +153,65 @@ export class LeaderboardService {
       me: { rank: rankOf.get(userId) ?? null, value: mine?.value ?? 0, detail: mine?.detail ?? 0, visible: mine?.visible ?? true },
       total: ranked.length,
     };
+  }
+
+  /** Début et fin de la semaine, en instants (minuit du lundi dans `APP_TIMEZONE`). */
+  private static readonly WINDOW = `r.reviewed_at >= ($1::date::timestamp AT TIME ZONE $3) AND r.reviewed_at < ($2::date::timestamp AT TIME ZONE $3)`;
+
+  private answerRows(weekStart: string, nextWeekStart: string): Promise<WeeklyRow[]> {
+    return this.dataSource.query(
+      `SELECT u.id, u.username, u.avatar_url, u.leaderboard_visible AS visible,
+              count(r.id)::int AS value,
+              coalesce(round(100.0 * count(r.id) FILTER (WHERE r.rating >= 2) / nullif(count(r.id), 0)), 0)::int AS detail
+       FROM users u
+       LEFT JOIN review_logs r ON r.user_id = u.id AND ${LeaderboardService.WINDOW}
+       GROUP BY u.id`,
+      [weekStart, nextWeekStart, this.timezone],
+    );
+  }
+
+  private pointRows(weekStart: string, nextWeekStart: string): Promise<WeeklyRow[]> {
+    return this.dataSource.query(
+      `SELECT u.id, u.username, u.avatar_url, u.leaderboard_visible AS visible,
+              coalesce(sum(r.points), 0)::int AS value,
+              count(r.id) FILTER (WHERE r.points > 0)::int AS detail
+       FROM users u
+       LEFT JOIN review_logs r ON r.user_id = u.id AND ${LeaderboardService.WINDOW}
+       GROUP BY u.id`,
+      [weekStart, nextWeekStart, this.timezone],
+    );
+  }
+
+  /**
+   * Points de tracé : par tracé compté réussi (note ≥ Hard), la précision, × le bonus de rapidité (`drawingPoints`,
+   * d'après la durée et le nombre de traits du modèle) si le tracé était chronométré ; un tracé raté vaut 0. Calculés ici plutôt qu'en SQL pour que la formule
+   * reste une fonction partagée et testée ; on ne lit que les tracés de la semaine.
+   */
+  private async drawingRows(weekStart: string, nextWeekStart: string): Promise<WeeklyRow[]> {
+    const users: Array<Omit<WeeklyRow, 'value' | 'detail'>> = await this.dataSource.query(
+      `SELECT id, username, avatar_url, leaderboard_visible AS visible FROM users`,
+    );
+    const drawings: Array<{ user_id: string; rating: number; precision: number; duration_ms: number; timed: boolean; strokes: number | null }> =
+      await this.dataSource.query(
+        `SELECT r.user_id, r.rating, r.drawing_precision AS precision, r.duration_ms, r.timed,
+                jsonb_array_length(i.metadata -> 'strokes') AS strokes
+         FROM review_logs r JOIN items i ON i.id = r.item_id
+         WHERE r.drawing_precision IS NOT NULL AND ${LeaderboardService.WINDOW}`,
+        [weekStart, nextWeekStart, this.timezone],
+      );
+    const totals = new Map<string, { points: number; count: number }>();
+    for (const row of drawings) {
+      const total = totals.get(row.user_id) ?? { points: 0, count: 0 };
+      total.count++;
+      if (row.rating >= 2) {
+        // Le bonus de rapidité est réservé au mode chronométré ; en mode chill, la précision seule.
+        total.points += row.timed ? drawingPoints(row.precision, row.duration_ms, row.strokes ?? 1) : row.precision;
+      }
+      totals.set(row.user_id, total);
+    }
+    return users.map((user) => {
+      const total = totals.get(user.id);
+      return { ...user, value: Math.round(total?.points ?? 0), detail: total?.count ?? 0 };
+    });
   }
 }

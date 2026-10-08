@@ -7,6 +7,8 @@ import { LeaderboardVisibility1790900000000 } from './1790900000000-LeaderboardV
 import { WeeklyKanji1790949461490 } from './1790949461490-WeeklyKanji';
 import { AuthEmailHash1791364281055 } from './1791364281055-AuthEmailHash';
 import { ReviewDrawingPrecision1791400000000 } from './1791400000000-ReviewDrawingPrecision';
+import { ReviewDrawingTimed1791500000000 } from './1791500000000-ReviewDrawingTimed';
+import { ReviewPoints1791600000000 } from './1791600000000-ReviewPoints';
 
 /** Liste explicite des migrations, dans l'ordre. À compléter à chaque `migration:generate`. */
-export const MIGRATIONS = [InitSchema1790847081144, LearningSchema1790863719553, ReviewSession1790865066983, DailyGoal1790867345952, AuthSessions1790868949782, LeaderboardVisibility1790900000000, WeeklyKanji1790949461490, AuthEmailHash1791364281055, ReviewDrawingPrecision1791400000000];
+export const MIGRATIONS = [InitSchema1790847081144, LearningSchema1790863719553, ReviewSession1790865066983, DailyGoal1790867345952, AuthSessions1790868949782, LeaderboardVisibility1790900000000, WeeklyKanji1790949461490, AuthEmailHash1791364281055, ReviewDrawingPrecision1791400000000, ReviewDrawingTimed1791500000000, ReviewPoints1791600000000];
