@@ -3,7 +3,7 @@ import { Router, RouterLink } from '@angular/router';
 import { KANJI_LEVELS, type CatalogItemDto, type ItemType, type KanjiLevel } from '@kanadrill/shared';
 import { CatalogService } from '../../core/catalog.service';
 import { TYPE_LABELS } from '../review/session-config';
-import { GROUP_LABELS, layoutCatalog, MASTERY_LABELS, masterySummary } from './catalog-layout';
+import { GROUP_LABELS, layoutCatalog, MASTERY_COLORS, MASTERY_LABELS, masterySummary } from './catalog-layout';
 import { KanjiBrowser } from './kanji-browser';
 import { MasteryMeter } from './mastery-meter';
 
@@ -54,7 +54,8 @@ const TABS: ItemType[] = ['hiragana', 'katakana', 'kanji'];
                   @if (cell; as item) {
                     <a
                       [routerLink]="['/learn', item.id]"
-                      class="flex flex-col items-center gap-1 border border-line bg-paper px-1 pb-2 pt-2 hover:border-ink"
+                      class="flex flex-col items-center gap-1 border bg-paper px-1 pb-2 pt-2 hover:border-ink"
+                      [class]="masteryColors[item.mastery].tile"
                       [attr.aria-label]="item.character + ', ' + item.reading + ', ' + masteryLabels[item.mastery]"
                     >
                       <span class="font-kana text-3xl leading-none" aria-hidden="true">{{ item.character }}</span>
@@ -91,6 +92,7 @@ export class LearnPage {
   protected readonly labels = TYPE_LABELS;
   protected readonly groupLabels = GROUP_LABELS;
   protected readonly masteryLabels = MASTERY_LABELS;
+  protected readonly masteryColors = MASTERY_COLORS;
 
   protected readonly items = signal<CatalogItemDto[] | null>(null);
   protected readonly error = signal(false);

@@ -34,6 +34,10 @@
   --mastery-learning: #9aa5bd;
   --mastery-known: #55607a;
   --mastery-mastered: #1b2437;
+  /* Couleurs de maîtrise de « Apprendre » (jauge et fond des cases) : ambre → bleu → vert. */
+  --level-learning: #c27803;
+  --level-known: #2f6fb5;
+  --level-mastered: #2c6e49;
 }
 
 .dark {
@@ -55,6 +59,9 @@
   --mastery-learning: #6b7898;
   --mastery-known: #94a0bd;
   --mastery-mastered: #c9d1e3;
+  --level-learning: #e0a23c;
+  --level-known: #6aa6e6;
+  --level-mastered: #4fae7b;
 }
 
 @theme inline {
@@ -70,6 +77,9 @@
   --color-on-ink: var(--on-ink);
   --color-on-seal: var(--on-seal);
   --color-on-ok: var(--on-ok);
+  --color-level-learning: var(--level-learning);
+  --color-level-known: var(--level-known);
+  --color-level-mastered: var(--level-mastered);
 }
 
 @theme {

@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import type { ItemDetailDto } from '@kanadrill/shared';
+import { readingLabel, type ItemDetailDto } from '@kanadrill/shared';
 import { CatalogService } from '../../core/catalog.service';
 import { TYPE_LABELS } from '../review/session-config';
 import { GROUP_LABELS, MASTERY_LABELS } from './catalog-layout';
@@ -43,7 +43,7 @@ import { StrokeOrder } from './stroke-order';
                 }
               </p>
             } @else {
-              <h1 class="text-2xl font-semibold tracking-tight">{{ item.reading }}</h1>
+              <h1 class="text-2xl font-semibold tracking-tight">{{ readingLabel(item.character, item.reading) }}</h1>
               <p class="text-sm text-ink-soft">
                 {{ typeLabels[item.type] }}
                 @if (item.group) {
@@ -178,6 +178,7 @@ export class ItemPage {
   protected readonly typeLabels = TYPE_LABELS;
   protected readonly groupLabels = GROUP_LABELS;
   protected readonly masteryLabels = MASTERY_LABELS;
+  protected readonly readingLabel = readingLabel;
 
   protected readonly item = signal<ItemDetailDto | null>(null);
   protected readonly error = signal(false);

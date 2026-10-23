@@ -55,6 +55,15 @@ export function toKatakana(hiragana: string): string {
   return [...hiragana].map((c) => String.fromCodePoint(c.codePointAt(0)! + 0x60)).join('');
 }
 
+/** Les kana qui se lisent comme un autre : on précise leur origine (« ji (chi) » = le voisé de ち, pas celui de し). */
+const HOMOPHONE_HINTS: Readonly<Record<string, string>> = { じ: 'shi', ぢ: 'chi', ず: 'su', づ: 'tsu' };
+
+/** La lecture à afficher quand on cherche le kana : « ji (shi) » pour じ, « ji (chi) » pour ぢ, « zu (su) » / « zu (tsu) » ; sinon la lecture. */
+export function readingLabel(character: string, reading: string): string {
+  const hint = HOMOPHONE_HINTS[toHiragana(character)];
+  return hint ? `${reading} (${hint})` : reading;
+}
+
 /** Convertit du katakana en hiragana (le prolongement ー et les caractères hors katakana sont conservés). */
 export function toHiragana(katakana: string): string {
   return [...katakana]

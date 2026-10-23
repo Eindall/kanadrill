@@ -19,6 +19,7 @@ import {
   type DrawingScore,
   type ItemDto,
   type SessionConfig,
+  readingLabel,
 } from '@kanadrill/shared';
 import { ReviewService } from '../../core/review.service';
 import { describeScore, suggestedAnswer, VERDICT_TITLES, type DrawingAnswer } from './drawing-feedback';
@@ -170,7 +171,7 @@ interface Feedback {
                     <p class="text-center text-sm text-ink-soft" lang="ja">{{ hint }}</p>
                   }
                 } @else {
-                  <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ current.item.readings[0] }}</p>
+                  <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ readingLabel(current.item) }}</p>
                 }
                 @if (phase() === 'question') {
                   <p class="text-sm text-ink-soft">
@@ -185,7 +186,7 @@ interface Feedback {
                   <p class="text-center text-4xl font-semibold leading-tight sm:text-5xl">{{ meanings(current.item, 28) }}</p>
                   <p class="text-sm text-ink-soft">Quel est ce kanji ?</p>
                 } @else {
-                  <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ current.item.readings[0] }}</p>
+                  <p class="text-6xl font-semibold leading-none sm:text-7xl">{{ readingLabel(current.item) }}</p>
                   <p class="text-sm text-ink-soft">Quel {{ current.item.type === 'katakana' ? 'katakana' : 'hiragana' }} se lit ainsi ?</p>
                 }
               } @else {
@@ -523,6 +524,10 @@ export class ReviewPage {
   }
 
   protected readonly isReverse = isReverseMode;
+
+  protected readingLabel(item: ItemDto): string {
+    return readingLabel(item.character, item.readings[0]);
+  }
 
   protected meanings(item: ItemDto, maxLength = 40): string {
     return displayMeanings(item, 3, maxLength);

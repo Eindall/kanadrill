@@ -16,6 +16,14 @@ export const MASTERY_LABELS: Record<MasteryLevel, string> = {
 /** Nombre de segments remplis (0 à 3) dans l'indicateur de maîtrise. */
 export const MASTERY_STEPS: Record<MasteryLevel, number> = { unseen: 0, learning: 1, known: 2, mastered: 3 };
 
+/** Classes Tailwind écrites en entier (sinon Tailwind ne les génère pas) : jauge, et fond + bordure de la case. */
+export const MASTERY_COLORS: Record<MasteryLevel, { bar: string; tile: string }> = {
+  unseen: { bar: 'bg-line', tile: 'border-line' },
+  learning: { bar: 'bg-level-learning', tile: 'border-level-learning/50 bg-level-learning/10' },
+  known: { bar: 'bg-level-known', tile: 'border-level-known/50 bg-level-known/10' },
+  mastered: { bar: 'bg-level-mastered', tile: 'border-level-mastered/50 bg-level-mastered/10' },
+};
+
 export interface GroupLayout {
   group: KanaGroup;
   columns: number;

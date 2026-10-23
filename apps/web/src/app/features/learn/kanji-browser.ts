@@ -8,7 +8,7 @@ import {
   type KanjiListItemDto,
 } from '@kanadrill/shared';
 import { CatalogService } from '../../core/catalog.service';
-import { MASTERY_LABELS } from './catalog-layout';
+import { MASTERY_COLORS, MASTERY_LABELS } from './catalog-layout';
 import { MasteryMeter } from './mastery-meter';
 
 export const LEVEL_LABELS: Record<KanjiLevel, string> = { N5: 'N5', N4: 'N4', N3: 'N3', N2: 'N2', N1: 'N1', other: 'Autres' };
@@ -111,7 +111,7 @@ const BIG_LEVEL = 300;
                 <a
                   [routerLink]="['/learn', item.id]"
                   class="flex h-full flex-col items-center gap-1 border bg-paper px-1 pb-2 pt-2 hover:border-ink"
-                  [class]="item.inDictionary ? 'border-ink/60' : 'border-line'"
+                  [class]="item.inDictionary ? masteryColors[item.mastery].tile : 'border-line'"
                   [attr.aria-label]="describe(item)"
                 >
                   <span class="font-kana text-3xl leading-none" lang="ja" aria-hidden="true">{{ item.character }}</span>
@@ -155,6 +155,7 @@ export class KanjiBrowser {
   readonly levelChange = output<KanjiLevel>();
   readonly searchChange = output<string>();
 
+  protected readonly masteryColors = MASTERY_COLORS;
   protected readonly labels = LEVEL_LABELS;
   protected readonly bigLevel = BIG_LEVEL;
   protected readonly levels = signal<KanjiLevelSummaryDto[]>(
